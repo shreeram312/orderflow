@@ -25,10 +25,12 @@ export const kitchenSignupSchema = z
   .object({
     name,
     restaurantName: z.string().trim().min(1, "Restaurant name is required").max(120),
+    // The UI supplies a fixed +91 dial code and restricts input to 10 digits,
+    // so the stored value is always unambiguous E.164.
     phone: z
       .string()
       .trim()
-      .regex(/^[0-9+\-\s()]{7,20}$/, "Enter a valid phone number"),
+      .regex(/^\+91[0-9]{10}$/, "Enter a valid 10-digit phone number"),
     email,
     password,
     confirmPassword: z.string(),

@@ -1,28 +1,29 @@
-"use client";
+import { UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 
-import { ModeToggle } from "./mode-toggle";
+import type { PublicUser } from "@/lib/api";
+import { SignOutButton } from "./sign-out-button";
 
-export default function Header() {
-  const links = [{ to: "/", label: "Home" }] as const;
-
+/**
+ * Shown on the signed-in dashboards only. The auth screens render their own
+ * branding inside the card, so the root layout deliberately has no header.
+ */
+export default function Header({ user }: { user: PublicUser }) {
   return (
-    <div>
-      <div className="flex flex-row items-center justify-between px-2 py-1">
-        <nav className="flex gap-4 text-lg">
-          {links.map(({ to, label }) => {
-            return (
-              <Link key={to} href={to}>
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="flex items-center gap-2">
-          <ModeToggle />
+    <header className="border-border/60 bg-card border-b">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <Link href="/" className="flex items-center gap-2">
+          <UtensilsCrossed className="size-5" style={{ color: "var(--brand-orange)" }} />
+          <span className="font-extrabold tracking-tight">OrderFlow</span>
+        </Link>
+
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground hidden text-sm sm:inline">
+            {user.name} · {user.role === "KITCHEN" ? "Kitchen" : "Customer"}
+          </span>
+          <SignOutButton />
         </div>
       </div>
-      <hr />
-    </div>
+    </header>
   );
 }
