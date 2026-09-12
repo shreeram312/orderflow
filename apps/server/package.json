@@ -12,13 +12,17 @@
   },
   "dependencies": {
     "@my-better-t-app/db": "workspace:*",
+    "@node-rs/argon2": "^2.2.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "jose": "^6.2.12",
     "varlock": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@my-better-t-app/config": "workspace:*",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",

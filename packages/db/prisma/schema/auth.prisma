@@ -1,0 +1,26 @@
+/// Roles are the only access-control primitive in OrderFlow.
+/// CUSTOMER places orders and owns a wallet; KITCHEN manages the menu
+/// and the order queue. Kitchen accounts are created through a separate
+/// signup endpoint gated by KITCHEN_SIGNUP_CODE.
+enum Role {
+  CUSTOMER
+  KITCHEN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  /// argon2id hash. Never logged, never returned by any endpoint.
+  passwordHash String   @map("password_hash")
+  name         String
+  role         Role     @default(CUSTOMER)
+
+  /// Kitchen-only fields. Null for every CUSTOMER.
+  restaurantName String? @map("restaurant_name")
+  phone          String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
