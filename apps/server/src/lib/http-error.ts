@@ -5,7 +5,8 @@ export type ErrorCode =
   | "INVALID_CREDENTIALS"
   | "INVALID_KITCHEN_CODE"
   | "UNAUTHENTICATED"
-  | "FORBIDDEN";
+  | "FORBIDDEN"
+  | "MENU_ITEM_NOT_FOUND";
 
 export class HttpError extends Error {
   constructor(
@@ -29,3 +30,5 @@ export const forbidden = (message = "You do not have access to this resource") =
   new HttpError(403, "FORBIDDEN", message);
 
 export const conflict = (code: ErrorCode, message: string) => new HttpError(409, code, message);
+
+export const notFound = (code: ErrorCode, message: string) => new HttpError(404, code, message);

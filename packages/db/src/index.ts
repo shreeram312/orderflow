@@ -19,5 +19,5 @@ export type Database = ReturnType<typeof createPrismaClient>;
  * unique-constraint violations; Role is the enum shared with the API layer.
  */
 export { Prisma } from "../prisma/generated/client";
-export { Role } from "../prisma/generated/enums";
-export type { User } from "../prisma/generated/client";
+export { MenuCategory, MenuItemStatus, Role } from "../prisma/generated/enums";
+export type { MenuItem, RestaurantSettings, User } from "../prisma/generated/client";

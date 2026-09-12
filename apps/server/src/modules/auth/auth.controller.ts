@@ -1,27 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ZodType } from "zod";
-
 import { clearSessionCookie, setSessionCookie } from "../../lib/cookie";
-import { badRequest, unauthenticated } from "../../lib/http-error";
+import { unauthenticated } from "../../lib/http-error";
+import { parse } from "../../lib/parse";
 import { signSession } from "../../lib/jwt";
 import * as authService from "./auth.service";
 import { customerSignupSchema, kitchenSignupSchema, loginSchema } from "./auth.schemas";
 import type { PublicUser } from "./auth.service";
-
-function parse<T>(schema: ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body);
-
-  if (!result.success) {
-    throw badRequest(
-      "VALIDATION_FAILED",
-      "Please check the highlighted fields",
-      // Field-keyed messages so the form can render errors inline.
-      result.error.flatten().fieldErrors,
-    );
-  }
-
-  return result.data;
-}
 
 /** Signs a session, sets the cookie, and returns the user. */
 async function issueSession(res: Response, user: PublicUser) {

@@ -5,6 +5,9 @@ import express from "express";
 import { env } from "./env.server";
 import { errorHandler } from "./middleware/error-handler";
 import { authRouter } from "./modules/auth/auth.routes";
+import { customerMenuRouter } from "./modules/menu/menu.customer.routes";
+import { kitchenMenuRouter } from "./modules/menu/menu.kitchen.routes";
+import { kitchenRestaurantRouter } from "./modules/restaurant/restaurant.kitchen.routes";
 
 const app = express();
 
@@ -26,6 +29,13 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+
+// Customer surface. The menu is readable before signing in.
+app.use("/menu", customerMenuRouter);
+
+// Kitchen surface. Each router applies authenticate + requireRole("KITCHEN").
+app.use("/kitchen/menu", kitchenMenuRouter);
+app.use("/kitchen", kitchenRestaurantRouter);
 
 app.use(errorHandler);
 

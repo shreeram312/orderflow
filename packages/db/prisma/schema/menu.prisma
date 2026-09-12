@@ -1,0 +1,60 @@
+/// Manual switch for a dish. There is deliberately no stock count:
+/// "we ran out" is expressed by pausing the item, not by decrementing a number.
+enum MenuItemStatus {
+  ACTIVE   // being served
+  PAUSED   // temporarily off: sold out, equipment down
+  ARCHIVED // removed from the menu; historical orders still reference it
+}
+
+/// Sections on the customer menu. An enum rather than free text so the kitchen
+/// dashboard can render a fixed dropdown and typos cannot fragment a section.
+/// Adding a section is one migration; if that becomes frequent, promote this
+/// to its own table with a foreign key.
+enum MenuCategory {
+  STARTERS
+  MAINS
+  SIDES
+  DESSERTS
+  BEVERAGES
+}
+
+model MenuItem {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal        @db.Decimal(10, 2)
+  category    MenuCategory   @default(MAINS)
+  status      MenuItemStatus @default(ACTIVE)
+  /// Veg/non-veg marker. Rendered as the green/brown dot customers look for.
+  isVeg       Boolean        @default(true) @map("is_veg")
+  imageUrl    String?        @map("image_url")
+  /// Per-dish cook time. Drives the order ETA, and in Phase 7 replaces the
+  /// single global KITCHEN_PREP_TIME_MS the Kitchen Worker sleeps for.
+  prepTimeMinutes Int        @default(10) @map("prep_time_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([category, status])
+  @@map("menu_items")
+}
+
+/// Single-row table holding restaurant-wide operational state.
+/// Always addressed by the fixed id "singleton".
+model RestaurantSettings {
+  id     String  @id @default("singleton")
+  name   String  @default("OrderFlow Kitchen")
+  /// The authoritative switch. Deliberately NOT derived from the hours below —
+  /// staff close early, open late, and shut mid-service; a computed value
+  /// would fight them.
+ isOpen Boolean @default(true) @map("is_open") 
+
+  /// Display only, shown to customers as "Today's Hours". 24h "HH:MM".
+  opensAt  String @default("09:00") @map("opens_at")
+  closesAt String @default("23:00") @map("closes_at")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("restaurant_settings")
+}
