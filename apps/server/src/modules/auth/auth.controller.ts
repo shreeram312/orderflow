@@ -1,24 +1,27 @@
 import type { NextFunction, Request, Response } from "express";
+
 import { clearSessionCookie, setSessionCookie } from "../../lib/cookie";
 import { unauthenticated } from "../../lib/http-error";
-import { parse } from "../../lib/parse";
 import { signSession } from "../../lib/jwt";
+import { parse } from "../../lib/parse";
+import { created, ok } from "../../lib/response";
 import * as authService from "./auth.service";
 import { customerSignupSchema, kitchenSignupSchema, loginSchema } from "./auth.schemas";
 import type { PublicUser } from "./auth.service";
 
-/** Signs a session, sets the cookie, and returns the user. */
+/** Signs a session and sets the cookie. */
 async function issueSession(res: Response, user: PublicUser) {
   const token = await signSession({ userId: user.id, role: user.role });
   setSessionCookie(res, token);
-  return { user };
 }
 
 export async function signupCustomer(req: Request, res: Response, next: NextFunction) {
   try {
     const input = parse(customerSignupSchema, req.body);
     const user = await authService.registerCustomer(input);
-    res.status(201).json(await issueSession(res, user));
+    await issueSession(res, user);
+
+    created(res, { user }, "Account created");
   } catch (error) {
     next(error);
   }
@@ -28,7 +31,9 @@ export async function signupKitchen(req: Request, res: Response, next: NextFunct
   try {
     const input = parse(kitchenSignupSchema, req.body);
     const user = await authService.registerKitchen(input);
-    res.status(201).json(await issueSession(res, user));
+    await issueSession(res, user);
+
+    created(res, { user }, "Staff account created");
   } catch (error) {
     next(error);
   }
@@ -38,7 +43,9 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const input = parse(loginSchema, req.body);
     const user = await authService.login(input);
-    res.status(200).json(await issueSession(res, user));
+    await issueSession(res, user);
+
+    ok(res, { user }, "Signed in");
   } catch (error) {
     next(error);
   }
@@ -46,7 +53,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export function logout(_req: Request, res: Response) {
   clearSessionCookie(res);
-  res.status(204).end();
+  // 200 with an envelope rather than 204, so every response has the same shape.
+  ok(res, null, "Signed out");
 }
 
 export async function me(req: Request, res: Response, next: NextFunction) {
@@ -58,7 +66,7 @@ export async function me(req: Request, res: Response, next: NextFunction) {
     const user = await authService.findPublicUser(req.user.userId);
     if (!user) throw unauthenticated("Your account no longer exists");
 
-    res.status(200).json({ user });
+    ok(res, { user });
   } catch (error) {
     next(error);
   }

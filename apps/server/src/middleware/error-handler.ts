@@ -6,6 +6,7 @@ import { HttpError } from "../lib/http-error";
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (error instanceof HttpError) {
     res.status(error.status).json({
+      status: false,
       error: error.code,
       message: error.message,
       ...(error.details ? { details: error.details } : {}),
@@ -18,6 +19,7 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
   console.error("[unhandled]", error);
 
   res.status(500).json({
+    status: false,
     error: "INTERNAL_ERROR",
     message: "Something went wrong",
   });

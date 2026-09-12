@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { ok } from "../../lib/response";
 import * as restaurantService from "../restaurant/restaurant.service";
 import * as menuService from "./menu.service";
 
@@ -18,7 +19,7 @@ export async function getMenu(_req: Request, res: Response, next: NextFunction) 
       restaurantService.getSettings(),
     ]);
 
-    res.status(200).json({ isOpen: settings.isOpen, items });
+    ok(res, { isOpen: settings.isOpen, items });
   } catch (error) {
     next(error);
   }

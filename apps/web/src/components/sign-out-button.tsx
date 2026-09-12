@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@my-better-t-app/ui/components/button";
+
 import { api } from "@/lib/api";
 
 export function SignOutButton() {
@@ -21,13 +23,8 @@ export function SignOutButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={pending}
-      className="border-input hover:bg-muted rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60"
-    >
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={pending}>
       {pending ? "Signing out…" : "Sign out"}
-    </button>
+    </Button>
   );
 }

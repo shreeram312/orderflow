@@ -11,7 +11,7 @@ import { SignOutButton } from "./sign-out-button";
 export default function Header({ user }: { user: PublicUser }) {
   return (
     <header className="border-border/60 bg-card border-b">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 py-2.5 sm:px-4">
         <Link href="/" className="flex items-center gap-2">
           <UtensilsCrossed className="size-5" style={{ color: "var(--brand-orange)" }} />
           <span className="font-extrabold tracking-tight">OrderFlow</span>

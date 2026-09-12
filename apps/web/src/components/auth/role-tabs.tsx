@@ -29,7 +29,7 @@ export function RoleTabs({ value, onChange }: { value: Role; onChange: (role: Ro
             type="button"
             onClick={() => onChange(role)}
             aria-pressed={active}
-            className="flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-colors"
+            className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-xs font-semibold transition-colors sm:gap-2 sm:text-sm"
             style={
               active
                 ? { background: "var(--brand-orange-soft)", color: "var(--brand-orange)" }

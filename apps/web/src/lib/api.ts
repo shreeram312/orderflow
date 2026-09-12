@@ -36,6 +36,9 @@ export function homePathFor(role: Role): "/customer" | "/kitchen" {
   return role === "KITCHEN" ? "/kitchen" : "/customer";
 }
 
+/** Success envelope from the server: { status: true, message, data }. */
+type Envelope<T> = { status: true; message: string; data: T };
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   let res: Response;
 
@@ -51,11 +54,11 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     throw new ApiError("NETWORK_ERROR", "Could not reach the server. Is it running on port 3000?");
   }
 
-  if (res.status === 204) return undefined as T;
-
   const body = await res.json().catch(() => null);
 
-  if (!res.ok) {
+  // The server sets `status: false` on every failure, so one check covers all
+  // of them without inspecting HTTP codes.
+  if (!res.ok || body?.status === false) {
     throw new ApiError(
       body?.error ?? "INTERNAL_ERROR",
       body?.message ?? "Something went wrong",
@@ -63,8 +66,48 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     );
   }
 
-  return body as T;
+  return (body as Envelope<T>).data;
 }
+
+export type MenuCategory = "STARTERS" | "MAINS" | "SIDES" | "DESSERTS" | "BEVERAGES";
+export type MenuItemStatus = "ACTIVE" | "PAUSED" | "ARCHIVED";
+
+export const MENU_CATEGORIES: MenuCategory[] = [
+  "STARTERS",
+  "MAINS",
+  "SIDES",
+  "DESSERTS",
+  "BEVERAGES",
+];
+
+export type MenuItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  category: MenuCategory;
+  status: MenuItemStatus;
+  isVeg: boolean;
+  imageUrl: string | null;
+  prepTimeMinutes: number;
+};
+
+export type MenuItemInput = {
+  name: string;
+  description?: string;
+  price: number;
+  category: MenuCategory;
+  isVeg: boolean;
+  imageUrl?: string;
+  prepTimeMinutes: number;
+};
+
+export type RestaurantSettings = {
+  name: string;
+  isOpen: boolean;
+  opensAt: string;
+  closesAt: string;
+};
 
 type AuthResponse = { user: PublicUser };
 
@@ -93,5 +136,42 @@ export const api = {
   login: (input: { email: string; password: string }) =>
     request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(input) }),
 
-  logout: () => request<void>("/auth/logout", { method: "POST" }),
+  logout: () => request<null>("/auth/logout", { method: "POST" }),
+
+  // --- customer ---
+  getMenu: () => request<{ isOpen: boolean; items: MenuItem[] }>("/menu", { method: "GET" }),
+
+  // --- kitchen ---
+  getSettings: () =>
+    request<{ settings: RestaurantSettings }>("/kitchen/settings", { method: "GET" }),
+
+  updateSettings: (input: Partial<RestaurantSettings>) =>
+    request<{ settings: RestaurantSettings }>("/kitchen/settings", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  listKitchenMenu: (opts?: { includeArchived?: boolean }) =>
+    request<{ items: MenuItem[] }>(
+      `/kitchen/menu${opts?.includeArchived ? "?includeArchived=true" : ""}`,
+      { method: "GET" },
+    ),
+
+  createMenuItem: (input: MenuItemInput) =>
+    request<{ item: MenuItem }>("/kitchen/menu", { method: "POST", body: JSON.stringify(input) }),
+
+  updateMenuItem: (id: string, input: Partial<MenuItemInput>) =>
+    request<{ item: MenuItem }>(`/kitchen/menu/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  setMenuItemStatus: (id: string, status: MenuItemStatus) =>
+    request<{ item: MenuItem }>(`/kitchen/menu/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  archiveMenuItem: (id: string) =>
+    request<{ item: MenuItem }>(`/kitchen/menu/${id}`, { method: "DELETE" }),
 };

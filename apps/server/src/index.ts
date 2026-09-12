@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 
 import { env } from "./env.server";
+import { ok } from "./lib/response";
 import { errorHandler } from "./middleware/error-handler";
 import { authRouter } from "./modules/auth/auth.routes";
 import { customerMenuRouter } from "./modules/menu/menu.customer.routes";
@@ -25,7 +26,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok" });
+  ok(res, { uptime: process.uptime() });
 });
 
 app.use("/auth", authRouter);

@@ -1,18 +1,27 @@
 import { redirect } from "next/navigation";
 
-import Header from "@/components/header";
+import { KitchenHeader } from "@/components/kitchen/kitchen-header";
+import { getRestaurantSettings } from "@/lib/kitchen-data";
 import { getSession } from "@/lib/session";
 
-/** Guards every page under /kitchen. See the note in the customer layout. */
+/**
+ * Guards every page under /kitchen.
+ *
+ * This is convenience, not security: it stops the wrong role from seeing a
+ * broken page. The real enforcement is requireRole() on the API, because
+ * anyone can call the server directly with curl.
+ */
 export default async function KitchenLayout({ children }: { children: React.ReactNode }) {
   const user = await getSession();
 
   if (!user) redirect("/login");
   if (user.role !== "KITCHEN") redirect("/customer");
 
+  const { settings } = await getRestaurantSettings();
+
   return (
-    <div className="min-h-svh">
-      <Header user={user} />
+    <div className="bg-background min-h-svh">
+      <KitchenHeader user={user} initialSettings={settings} />
       {children}
     </div>
   );

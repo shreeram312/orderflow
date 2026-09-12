@@ -1,3 +1,5 @@
+import { Button } from "@my-better-t-app/ui/components/button";
+
 export function SubmitButton({
   pending,
   className,
@@ -8,12 +10,8 @@ export function SubmitButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={`bg-primary text-primary-foreground hover:bg-primary/90 mt-1 h-11 w-full rounded-lg text-sm font-semibold transition-colors disabled:opacity-60 ${className ?? ""}`}
-    >
+    <Button type="submit" size="lg" disabled={pending} className={`mt-1 w-full ${className ?? ""}`}>
       {children}
-    </button>
+    </Button>
   );
 }

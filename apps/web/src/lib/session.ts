@@ -25,8 +25,10 @@ export async function getSession(): Promise<PublicUser | null> {
 
     if (!res.ok) return null;
 
-    const body = (await res.json()) as { user: PublicUser };
-    return body.user;
+    const body = (await res.json()) as { status: boolean; data: { user: PublicUser } };
+    if (!body.status) return null;
+
+    return body.data.user;
   } catch {
     // API unreachable is treated as signed out rather than a crashed page.
     return null;
