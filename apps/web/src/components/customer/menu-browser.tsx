@@ -1,12 +1,13 @@
 "use client";
 
-import { Plus, Search, UtensilsCrossed } from "lucide-react";
+import { Minus, Plus, Search, UtensilsCrossed } from "lucide-react";
 import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { Button } from "@my-better-t-app/ui/components/button";
 
 import { useCustomerMenu } from "@/hooks/use-customer";
+import { useCart } from "./cart-context";
 import { type MenuCategory, type MenuItem } from "@/lib/api";
 
 const CATEGORY_ORDER: MenuCategory[] = ["STARTERS", "MAINS", "SIDES", "DESSERTS", "BEVERAGES"];
@@ -30,6 +31,9 @@ function VegDot({ isVeg }: { isVeg: boolean }) {
 }
 
 function DishCard({ item }: { item: MenuItem }) {
+  const { add, decrement, quantityOf } = useCart();
+  const quantity = quantityOf(item.id);
+
   return (
     <li className="bg-card ring-border/60 flex flex-col overflow-hidden rounded-xl shadow-sm ring-1">
       <div className="bg-muted relative aspect-[4/3] w-full">
@@ -53,17 +57,52 @@ function DishCard({ item }: { item: MenuItem }) {
 
         <div className="mt-3 flex items-center justify-between gap-2">
           <p className="text-base font-extrabold">₹{item.price.toLocaleString()}</p>
-          {/* Visual only until the cart exists — see CartPanel. */}
-          <Button
-            type="button"
-            size="sm"
-            disabled
-            title="Ordering arrives with the cart"
-            style={{ background: "var(--brand-orange-soft)", color: "var(--brand-orange)" }}
-          >
-            Add
-            <Plus />
-          </Button>
+
+          {quantity === 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => add(item)}
+              style={{ background: "var(--brand-orange-soft)", color: "var(--brand-orange)" }}
+            >
+              Add
+              <Plus />
+            </Button>
+          ) : (
+            <div
+              className="flex items-center gap-1 rounded-full px-1"
+              style={{ background: "var(--brand-orange-soft)" }}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => decrement(item.id)}
+                aria-label={`Remove one ${item.name}`}
+                className="size-7"
+                style={{ color: "var(--brand-orange)" }}
+              >
+                <Minus />
+              </Button>
+              <span
+                className="w-4 text-center text-xs font-bold"
+                style={{ color: "var(--brand-orange)" }}
+              >
+                {quantity}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => add(item)}
+                aria-label={`Add one more ${item.name}`}
+                className="size-7"
+                style={{ color: "var(--brand-orange)" }}
+              >
+                <Plus />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </li>

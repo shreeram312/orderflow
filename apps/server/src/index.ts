@@ -9,6 +9,7 @@ import { authRouter } from "./modules/auth/auth.routes";
 import { customerMenuRouter } from "./modules/menu/menu.customer.routes";
 import { kitchenMenuRouter } from "./modules/menu/menu.kitchen.routes";
 import { kitchenRestaurantRouter } from "./modules/restaurant/restaurant.kitchen.routes";
+import { customerOrderRouter } from "./modules/orders/order.customer.routes";
 import { customerWalletRouter } from "./modules/wallet/wallet.customer.routes";
 
 const app = express();
@@ -35,6 +36,7 @@ app.use("/auth", authRouter);
 // Customer surface. The menu is readable before signing in.
 app.use("/menu", customerMenuRouter);
 app.use("/wallet", customerWalletRouter);
+app.use("/orders", customerOrderRouter);
 
 // Kitchen surface. Each router applies authenticate + requireRole("KITCHEN").
 app.use("/kitchen/menu", kitchenMenuRouter);

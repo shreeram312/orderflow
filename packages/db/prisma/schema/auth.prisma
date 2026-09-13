@@ -16,6 +16,7 @@ model User {
   role         Role     @default(CUSTOMER)
   /// Customers only; kitchen staff never hold a wallet.
   wallet       Wallet?
+  orders       Order[]
 
   /// Kitchen-only fields. Null for every CUSTOMER.
   restaurantName String? @map("restaurant_name")

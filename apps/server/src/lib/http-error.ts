@@ -6,7 +6,10 @@ export type ErrorCode =
   | "INVALID_KITCHEN_CODE"
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
-  | "MENU_ITEM_NOT_FOUND";
+  | "MENU_ITEM_NOT_FOUND"
+  | "ITEM_NOT_FOUND"
+  | "ORDER_NOT_FOUND"
+  | "INSUFFICIENT_BALANCE";
 
 export class HttpError extends Error {
   constructor(

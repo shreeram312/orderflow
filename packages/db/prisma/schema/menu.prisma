@@ -31,6 +31,7 @@ model MenuItem {
   /// Per-dish cook time. Drives the order ETA, and in Phase 7 replaces the
   /// single global KITCHEN_PREP_TIME_MS the Kitchen Worker sleeps for.
   prepTimeMinutes Int        @default(10) @map("prep_time_minutes")
+  orderItems      OrderItem[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

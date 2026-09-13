@@ -121,6 +121,32 @@ export type WalletTransaction = {
   createdAt: string;
 };
 
+export type OrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PREPARING"
+  | "READY"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "REJECTED";
+
+export type OrderLine = {
+  id: string;
+  menuItemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+};
+
+export type Order = {
+  id: string;
+  status: OrderStatus;
+  totalAmount: number;
+  failureReason: string | null;
+  createdAt: string;
+  items: OrderLine[];
+};
+
 type AuthResponse = { user: PublicUser };
 
 export const api = {
@@ -198,4 +224,10 @@ export const api = {
 
   listWalletTransactions: () =>
     request<{ transactions: WalletTransaction[] }>("/wallet/transactions", { method: "GET" }),
+
+  // --- orders (customer) ---
+  createOrder: (items: { menuItemId: string; quantity: number }[]) =>
+    request<{ order: Order }>("/orders", { method: "POST", body: JSON.stringify({ items }) }),
+
+  listOrders: () => request<{ orders: Order[] }>("/orders", { method: "GET" }),
 };

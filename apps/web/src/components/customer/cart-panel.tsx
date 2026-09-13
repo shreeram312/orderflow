@@ -2,41 +2,52 @@
 
 import { ArrowRight, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import Image from "next/image";
+import { toast } from "sonner";
 
 import { Button } from "@my-better-t-app/ui/components/button";
 
-import type { MenuItem } from "@/lib/api";
+import { usePlaceOrder } from "@/hooks/use-customer";
+import { useCart } from "./cart-context";
 
-export type CartLine = { item: MenuItem; quantity: number };
+export function CartPanel() {
+  const { lines, count, total, add, decrement, remove, clear } = useCart();
+  const placeOrder = usePlaceOrder();
 
-/**
- * Presentational only — there is deliberately no cart state, no add/remove
- * handlers and no checkout call yet.
- *
- * The row markup is written against a `lines` array rather than hardcoded, so
- * when cart state does arrive it only has to be passed in; nothing here has to
- * be rebuilt. Today it always renders the empty state.
- */
-export function CartPanel({ lines = [] }: { lines?: CartLine[] }) {
-  const total = lines.reduce((sum, line) => sum + line.item.price * line.quantity, 0);
+  function submit() {
+    placeOrder.mutate(
+      lines.map((line) => ({ menuItemId: line.item.id, quantity: line.quantity })),
+      {
+        onSuccess: (order) => {
+          clear();
+          toast.success(`Order placed — ₹${order.totalAmount.toLocaleString()}`);
+        },
+      },
+    );
+  }
 
   return (
     <section className="bg-card ring-border/60 rounded-xl p-4 shadow-sm ring-1">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-bold">Your Cart{lines.length > 0 ? ` (${lines.length})` : ""}</h2>
-        {lines.length > 0 ? (
-          <Button type="button" variant="link" size="sm" disabled className="h-auto p-0">
+        <h2 className="text-sm font-bold">Your Cart{count > 0 ? ` (${count})` : ""}</h2>
+        {count > 0 ? (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={clear}
+            className="text-destructive h-auto p-0"
+          >
             Clear All
           </Button>
         ) : null}
       </div>
 
-      {lines.length === 0 ? (
+      {count === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
           <ShoppingBag className="text-muted-foreground/40 size-7" />
           <p className="mt-2.5 text-sm font-semibold">Your cart is empty</p>
           <p className="text-muted-foreground mt-1 max-w-[26ch] text-xs">
-            Ordering arrives with the next phase — the menu is browsable now.
+            Add a dish from the menu to get started.
           </p>
         </div>
       ) : (
@@ -62,17 +73,31 @@ export function CartPanel({ lines = [] }: { lines?: CartLine[] }) {
                   <p className="text-muted-foreground text-[11px]">₹{item.price}</p>
                 </div>
 
-                <div className="bg-muted/60 flex items-center gap-1 rounded-full px-1">
-                  <Button type="button" variant="ghost" size="icon" disabled className="size-7">
+                <div className="bg-muted/60 flex items-center gap-0.5 rounded-full px-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => decrement(item.id)}
+                    aria-label={`Remove one ${item.name}`}
+                    className="size-7"
+                  >
                     <Minus />
                   </Button>
                   <span className="w-4 text-center text-xs font-semibold">{quantity}</span>
-                  <Button type="button" variant="ghost" size="icon" disabled className="size-7">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => add(item)}
+                    aria-label={`Add one more ${item.name}`}
+                    className="size-7"
+                  >
                     <Plus />
                   </Button>
                 </div>
 
-                <p className="w-12 text-right text-[13px] font-bold">
+                <p className="w-14 text-right text-[13px] font-bold">
                   ₹{(item.price * quantity).toLocaleString()}
                 </p>
 
@@ -80,7 +105,8 @@ export function CartPanel({ lines = [] }: { lines?: CartLine[] }) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  disabled
+                  onClick={() => remove(item.id)}
+                  aria-label={`Remove ${item.name} from cart`}
                   className="text-destructive size-7"
                 >
                   <Trash2 />
@@ -98,12 +124,13 @@ export function CartPanel({ lines = [] }: { lines?: CartLine[] }) {
 
       <Button
         type="button"
-        disabled
+        onClick={submit}
+        disabled={count === 0 || placeOrder.isPending}
         className="mt-3 w-full text-white"
         style={{ background: "var(--brand-orange)" }}
       >
-        Place Order
-        <ArrowRight />
+        {placeOrder.isPending ? "Placing…" : "Place Order"}
+        {placeOrder.isPending ? null : <ArrowRight />}
       </Button>
     </section>
   );

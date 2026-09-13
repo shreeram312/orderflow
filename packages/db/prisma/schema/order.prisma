@@ -1,0 +1,48 @@
+/// PENDING -> CONFIRMED -> PREPARING -> READY -> COMPLETED, with two terminal
+/// branches. Only the API sets PENDING today; everything past it is written by
+/// the workers once the event chain exists.
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  status        OrderStatus @default(PENDING)
+  totalAmount   Decimal     @map("total_amount") @db.Decimal(10, 2)
+  /// Populated when status becomes REJECTED, so the customer sees a reason
+  /// rather than a bare status.
+  failureReason String?     @map("failure_reason")
+
+  items     OrderItem[]
+  user      User        @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String @id @default(uuid())
+  orderId    String @map("order_id")
+  menuItemId String @map("menu_item_id")
+  /// Snapshots. Without these, editing the menu would silently rewrite the
+  /// contents and totals of every historical order.
+  name       String
+  unitPrice  Decimal @map("unit_price") @db.Decimal(10, 2)
+  quantity   Int
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}

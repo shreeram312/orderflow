@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { CartProvider } from "@/components/customer/cart-context";
 import { CustomerHeader } from "@/components/customer/customer-header";
 import { getSession } from "@/lib/session";
 
@@ -17,9 +18,11 @@ export default async function CustomerLayout({ children }: { children: React.Rea
   if (user.role !== "CUSTOMER") redirect("/kitchen");
 
   return (
-    <div className="bg-background min-h-svh">
-      <CustomerHeader user={user} />
-      {children}
-    </div>
+    <CartProvider>
+      <div className="bg-background min-h-svh">
+        <CustomerHeader user={user} />
+        {children}
+      </div>
+    </CartProvider>
   );
 }
