@@ -109,6 +109,18 @@ export type RestaurantSettings = {
   closesAt: string;
 };
 
+export type WalletSummary = { balance: number };
+
+export type WalletTransaction = {
+  id: string;
+  type: "TOPUP" | "DEBIT" | "REFUND";
+  amount: number;
+  balanceAfter: number;
+  note: string | null;
+  orderId: string | null;
+  createdAt: string;
+};
+
 type AuthResponse = { user: PublicUser };
 
 export const api = {
@@ -174,4 +186,16 @@ export const api = {
 
   archiveMenuItem: (id: string) =>
     request<{ item: MenuItem }>(`/kitchen/menu/${id}`, { method: "DELETE" }),
+
+  // --- wallet (customer) ---
+  getWallet: () => request<{ wallet: WalletSummary }>("/wallet", { method: "GET" }),
+
+  topUpWallet: (amount: number) =>
+    request<{ wallet: WalletSummary }>("/wallet/topup", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
+
+  listWalletTransactions: () =>
+    request<{ transactions: WalletTransaction[] }>("/wallet/transactions", { method: "GET" }),
 };

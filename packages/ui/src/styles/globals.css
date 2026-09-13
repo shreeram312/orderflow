@@ -30,7 +30,7 @@
   --chart-3: oklch(0.6744 0.0427 136.0110);
   --chart-4: oklch(0.5510 0.0234 264.3637);
   --chart-5: oklch(0.9251 0.0071 88.6450);
-  --radius: 0.35rem;
+  --radius: 0.5rem;
   /* OrderFlow brand accents, used by the auth screens. */
   --brand: oklch(0.4620 0.0870 158.0000);
   --brand-orange: oklch(0.6500 0.1900 40.0000);
@@ -55,7 +55,7 @@
   --shadow-offset-x: 0px;
   --shadow-offset-y: 1px;
   --letter-spacing: 0em;
-  --spacing: 0.23rem;
+  --spacing: 0.25rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(225 27.7778% 14.1176% / 0.02);
   --shadow-xs: 0px 1px 2px 0px hsl(225 27.7778% 14.1176% / 0.02);
   --shadow-sm: 0px 1px 2px 0px hsl(225 27.7778% 14.1176% / 0.04), 0px 1px 2px -1px hsl(225 27.7778% 14.1176% / 0.04);
@@ -100,7 +100,7 @@
   --sidebar-border: oklch(0.2850 0 0);
   --sidebar-ring: oklch(0.6333 0.0309 154.9039);
   --destructive-foreground: oklch(1.0000 0 0);
-  --radius: 0.35rem;
+  --radius: 0.5rem;
   --font-sans: Antic, ui-sans-serif, sans-serif, system-ui;
   --font-serif: Signifier, Georgia, serif;
   --font-mono: JetBrains Mono, Courier New, monospace;
@@ -111,7 +111,7 @@
   --shadow-offset-x: 0px;
   --shadow-offset-y: 1px;
   --letter-spacing: 0em;
-  --spacing: 0.23rem;
+  --spacing: 0.25rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.02);
   --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.02);
   --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.04), 0px 1px 2px -1px hsl(0 0% 0% / 0.04);
@@ -164,7 +164,7 @@
   --radius-4xl: calc(var(--radius) + 16px);
   --font-mono: JetBrains Mono, Courier New, monospace;
   --font-serif: Signifier, Georgia, serif;
-  --radius: 0.35rem;
+  --radius: 0.5rem;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);

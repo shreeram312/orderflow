@@ -24,13 +24,7 @@ function initials(name: string) {
     .join("");
 }
 
-/**
- * Deliberately sparse: brand on the left, one avatar menu on the right.
- * Open/closed state and its toggle live in the Restaurant Status card, which
- * is the single place that owns them — duplicating them up here made the bar
- * noisy and gave the same action two homes.
- */
-export function KitchenHeader({ user }: { user: PublicUser }) {
+export function CustomerHeader({ user }: { user: PublicUser }) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -51,11 +45,10 @@ export function KitchenHeader({ user }: { user: PublicUser }) {
           <UtensilsCrossed className="size-5" style={{ color: "var(--brand-orange)" }} />
           <span className="text-[15px] font-extrabold tracking-tight">OrderFlow</span>
         </Link>
-        <span className="text-muted-foreground border-border hidden border-l pl-3 text-sm sm:inline">
-          Kitchen
-        </span>
 
-        <div className="ml-auto flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground hidden text-sm sm:inline">{user.name}</span>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -74,7 +67,6 @@ export function KitchenHeader({ user }: { user: PublicUser }) {
               <div className="px-2 py-1.5">
                 <p className="truncate text-sm font-semibold">{user.name}</p>
                 <p className="text-muted-foreground truncate text-xs">{user.email}</p>
-                <p className="text-muted-foreground mt-0.5 text-[11px]">Kitchen Staff</p>
               </div>
 
               <DropdownMenuSeparator />

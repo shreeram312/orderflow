@@ -14,6 +14,8 @@ model User {
   passwordHash String   @map("password_hash")
   name         String
   role         Role     @default(CUSTOMER)
+  /// Customers only; kitchen staff never hold a wallet.
+  wallet       Wallet?
 
   /// Kitchen-only fields. Null for every CUSTOMER.
   restaurantName String? @map("restaurant_name")

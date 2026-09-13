@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { ENV } from "@/env";
-import type { MenuItem, RestaurantSettings } from "./api";
+import type { MenuItem, RestaurantSettings, WalletSummary } from "./api";
 
 /**
  * Server Components do not forward browser cookies to `fetch`, so the Cookie
@@ -35,4 +35,8 @@ export function getRestaurantSettings() {
 
 export function getCustomerMenu() {
   return serverGet<{ isOpen: boolean; items: MenuItem[] }>("/menu");
+}
+
+export function getWallet() {
+  return serverGet<{ wallet: WalletSummary }>("/wallet");
 }

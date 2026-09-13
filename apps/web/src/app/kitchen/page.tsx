@@ -2,7 +2,6 @@ import { ClipboardList } from "lucide-react";
 
 import { MenuManagementCard } from "@/components/kitchen/menu-management-card";
 import { RestaurantStatusCard } from "@/components/kitchen/restaurant-status-card";
-import { TodaysOverview } from "@/components/kitchen/todays-overview";
 import { getKitchenMenu, getRestaurantSettings } from "@/lib/kitchen-data";
 
 export default async function KitchenDashboardPage() {
@@ -32,7 +31,6 @@ export default async function KitchenDashboardPage() {
 
         <div className="order-1 grid gap-4 xl:order-3">
           <RestaurantStatusCard initial={settings} />
-          <TodaysOverview />
           <MenuManagementCard initial={items} />
         </div>
       </div>

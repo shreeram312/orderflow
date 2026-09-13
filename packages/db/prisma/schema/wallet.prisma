@@ -1,0 +1,41 @@
+enum TxType {
+  TOPUP
+  DEBIT
+  REFUND
+}
+
+/// One wallet per customer. `balance` is the running total kept for fast
+/// reads; every movement also writes a WalletTransaction, so the ledger is
+/// the source of truth and the balance is a cache of it.
+model Wallet {
+  id           String              @id @default(uuid())
+  userId       String              @unique @map("user_id")
+  balance      Decimal             @default(0) @db.Decimal(10, 2)
+  user         User                @relation(fields: [userId], references: [id])
+  transactions WalletTransaction[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id       String  @id @default(uuid())
+  walletId String  @map("wallet_id")
+  /// Set for DEBIT and REFUND rows once orders exist; null for top-ups.
+  orderId  String? @map("order_id")
+  type     TxType
+  amount   Decimal @db.Decimal(10, 2)
+  /// Snapshot so the history renders without replaying every row.
+  balanceAfter Decimal @db.Decimal(10, 2) @map("balance_after")
+  note     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  wallet    Wallet   @relation(fields: [walletId], references: [id])
+
+  /// The idempotency guard: a redelivered OrderCancelled event cannot refund
+  /// the same order twice.
+  @@unique([orderId, type])
+  @@index([walletId, createdAt])
+  @@map("wallet_transactions")
+}

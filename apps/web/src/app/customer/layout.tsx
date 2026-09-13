@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import Header from "@/components/header";
+import { CustomerHeader } from "@/components/customer/customer-header";
 import { getSession } from "@/lib/session";
 
 /**
@@ -17,8 +17,8 @@ export default async function CustomerLayout({ children }: { children: React.Rea
   if (user.role !== "CUSTOMER") redirect("/kitchen");
 
   return (
-    <div className="min-h-svh">
-      <Header user={user} />
+    <div className="bg-background min-h-svh">
+      <CustomerHeader user={user} />
       {children}
     </div>
   );
