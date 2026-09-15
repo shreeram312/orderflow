@@ -29,5 +29,5 @@
     "typescript": "catalog:",
     "varlock": "catalog:"
   },
-  "packageManager": "pnpm@11.0.9"
+  "packageManager": "pnpm@12.4.1"
 }
