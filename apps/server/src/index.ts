@@ -1,7 +1,7 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-
+import { initBroker } from "./infra/rabbitmq";
 import { env } from "./env.server";
 import { ok } from "./lib/response";
 import { errorHandler } from "./middleware/error-handler";
@@ -43,6 +43,8 @@ app.use("/kitchen/menu", kitchenMenuRouter);
 app.use("/kitchen", kitchenRestaurantRouter);
 
 app.use(errorHandler);
+
+await initBroker();
 
 app.listen(3000, () => {
   console.log("Server is running on http://localhost:3000");
