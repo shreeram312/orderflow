@@ -1,6 +1,6 @@
 import { badRequest, notFound } from "../../lib/http-error";
 import { getDb } from "../../services";
-import { buildOrderCreatedEvent, publishOrderCreated } from "./order.events";
+import { buildOrderCreatedEvent, publishOrderEvent } from "./order.events";
 import type { CreateOrderInput } from "./order.schemas";
 
 const toNumber = (value: { toString(): string }) => Number(value.toString());
@@ -11,7 +11,13 @@ export type OrderView = {
   totalAmount: number;
   failureReason: string | null;
   createdAt: Date;
-  items: { id: string; menuItemId: string; name: string; unitPrice: number; quantity: number }[];
+  items: {
+    id: string;
+    menuItemId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+  }[];
 };
 
 type OrderRow = {
@@ -53,16 +59,26 @@ function toView(row: OrderRow): OrderView {
  * open — that decision belongs to the Order Worker, made asynchronously against
  * live state. The API only validates that items exist and can be priced.
  */
-export async function createOrder(userId: string, input: CreateOrderInput): Promise<OrderView> {
+export async function createOrder(
+  userId: string,
+  input: CreateOrderInput,
+): Promise<OrderView> {
   const db = getDb();
 
   const menuItems = await db.menuItem.findMany({
-    where: { id: { in: input.items.map((i) => i.menuItemId) }, status: { not: "ARCHIVED" } },
+    where: {
+      id: { in: input.items.map((i) => i.menuItemId) },
+      status: { not: "ARCHIVED" },
+    },
   });
 
   const byId = new Map(menuItems.map((item) => [item.id, item]));
   const missing = input.items.find((line) => !byId.has(line.menuItemId));
-  if (missing) throw badRequest("ITEM_NOT_FOUND", "One of those items is no longer available");
+  if (missing)
+    throw badRequest(
+      "ITEM_NOT_FOUND",
+      "One of those items is no longer available",
+    );
 
   const lines = input.items.map((line) => {
     // Non-null: the missing check above already proved every id resolves.
@@ -75,7 +91,10 @@ export async function createOrder(userId: string, input: CreateOrderInput): Prom
     };
   });
 
-  const total = lines.reduce((sum, line) => sum + toNumber(line.unitPrice) * line.quantity, 0);
+  const total = lines.reduce(
+    (sum, line) => sum + toNumber(line.unitPrice) * line.quantity,
+    0,
+  );
 
   const order = await db.$transaction(async (tx) => {
     // Conditional debit: `balance >= total` lives in the WHERE clause, so two
@@ -87,7 +106,10 @@ export async function createOrder(userId: string, input: CreateOrderInput): Prom
     });
 
     if (count === 0) {
-      throw badRequest("INSUFFICIENT_BALANCE", "Your wallet does not cover this order");
+      throw badRequest(
+        "INSUFFICIENT_BALANCE",
+        "Your wallet does not cover this order",
+      );
     }
 
     const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
@@ -117,13 +139,16 @@ export async function createOrder(userId: string, input: CreateOrderInput): Prom
     return created;
   });
 
-  // Outside the transaction on purpose — see the note in order.events.ts.
-  await publishOrderCreated(
+  await publishOrderEvent(
     buildOrderCreatedEvent({
       orderId: order.id,
       userId,
       totalAmount: total,
-      items: lines.map((l) => ({ menuItemId: l.menuItemId, name: l.name, quantity: l.quantity })),
+      items: lines.map((l) => ({
+        menuItemId: l.menuItemId,
+        name: l.name,
+        quantity: l.quantity,
+      })),
     }),
   );
 
@@ -141,12 +166,19 @@ export async function listOrders(userId: string): Promise<OrderView[]> {
   return rows.map(toView);
 }
 
-export async function getOrder(userId: string, orderId: string): Promise<OrderView> {
-  const row = await getDb().order.findUnique({ where: { id: orderId }, include: { items: true } });
+export async function getOrder(
+  userId: string,
+  orderId: string,
+): Promise<OrderView> {
+  const row = await getDb().order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
 
   // Ownership is part of the lookup: without it any signed-in user could read
   // any order by guessing an id.
-  if (!row || row.userId !== userId) throw notFound("ORDER_NOT_FOUND", "That order does not exist");
+  if (!row || row.userId !== userId)
+    throw notFound("ORDER_NOT_FOUND", "That order does not exist");
 
   return toView(row);
 }

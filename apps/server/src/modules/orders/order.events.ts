@@ -1,25 +1,11 @@
-/**
- * Event contracts and the publish seam.
- *
- * Nothing here talks to RabbitMQ yet — `publishOrderCreated` logs and returns.
- * Replace its body with an amqplib publish to `orderflow.events` using the
- * routing key below; the call site in order.service.ts does not need to change.
- *
- * Note where it is called from: *after* the database transaction commits. That
- * gap is real — the commit can succeed and the publish fail, leaving an order
- * no worker will ever pick up. The Outbox Pattern is what closes it.
- */
-export const EXCHANGE = "orderflow.events";
+import { env } from "@/env.server";
+import { getChannel } from "@/infra/rabbitmq";
 
 export const ROUTING_KEYS = {
   orderCreated: "order.created",
-  orderConfirmed: "order.confirmed",
-  orderRejected: "order.rejected",
-  orderCancelled: "order.cancelled",
 } as const;
 
 export type OrderCreatedEvent = {
-  /** The idempotency key consumers dedupe on. */
   eventId: string;
   eventType: "OrderCreated";
   occurredAt: string;
@@ -50,9 +36,13 @@ export function buildOrderCreatedEvent(input: {
   };
 }
 
-// TODO(rabbitmq): publish `event` to EXCHANGE with ROUTING_KEYS.orderCreated,
-// persistent: true. Until then orders stay PENDING, which is the correct
-// visible behaviour for "the worker has not picked it up yet".
-export async function publishOrderCreated(event: OrderCreatedEvent): Promise<void> {
-  console.info("[event:pending-publish]", ROUTING_KEYS.orderCreated, JSON.stringify(event));
+export async function publishOrderEvent(
+  event: OrderCreatedEvent,
+): Promise<void> {
+  getChannel().publish(
+    env.RABBITMQ_EXCHANGE,
+    ROUTING_KEYS.orderCreated,
+    Buffer.from(JSON.stringify(event)),
+    { persistent: true, contentType: "application/json" },
+  );
 }
