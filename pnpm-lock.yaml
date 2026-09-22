@@ -233,6 +233,9 @@ importers:
 
   apps/order-worker:
     dependencies:
+      '@my-better-t-app/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
