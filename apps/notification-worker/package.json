@@ -1,0 +1,20 @@
+{
+  "name": "notification-worker",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@my-better-t-app/db": "workspace:*",
+    "amqplib": "^2.0.1"
+  },
+  "devDependencies": {
+    "@my-better-t-app/config": "workspace:*",
+    "@types/amqplib": "^0.10.8",
+    "@types/node": "catalog:",
+    "tsx": "^4.23.13",
+    "typescript": "catalog:"
+  }
+}

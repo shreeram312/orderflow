@@ -1,7 +1,17 @@
-import { badRequest, notFound } from "../../lib/http-error";
+import { badRequest, conflict, notFound } from "../../lib/http-error";
 import { getDb } from "../../services";
-import { buildOrderCreatedEvent, publishOrderEvent } from "./order.events";
-import type { CreateOrderInput } from "./order.schemas";
+import {
+  ROUTING_KEYS,
+  STATUS_ROUTING_KEYS,
+  buildOrderCreatedEvent,
+  buildOrderStatusChangedEvent,
+  publishOrderEvent,
+} from "./order.events";
+import type { KitchenStatus } from "./order.events";
+import type {
+  CreateOrderInput,
+  ListKitchenOrdersQuery,
+} from "./order.schemas";
 
 const toNumber = (value: { toString(): string }) => Number(value.toString());
 
@@ -140,6 +150,7 @@ export async function createOrder(
   });
 
   await publishOrderEvent(
+    ROUTING_KEYS.orderCreated,
     buildOrderCreatedEvent({
       orderId: order.id,
       userId,
@@ -181,4 +192,98 @@ export async function getOrder(
     throw notFound("ORDER_NOT_FOUND", "That order does not exist");
 
   return toView(row);
+}
+
+/* ------------------------------------------------------------------ */
+/* Kitchen surface                                                      */
+/* ------------------------------------------------------------------ */
+
+/** The live board: tickets the kitchen still has work to do on. */
+const ACTIVE_STATUSES = ["CONFIRMED", "PREPARING", "READY"] as const;
+
+/**
+ * The status an order must already be in for a kitchen action to be legal.
+ * Read it as "to reach READY, you must currently be PREPARING". This is the
+ * whole state machine — there is no other path through the kitchen.
+ */
+const REQUIRED_CURRENT = {
+  PREPARING: "CONFIRMED",
+  READY: "PREPARING",
+  COMPLETED: "READY",
+} as const satisfies Record<KitchenStatus, string>;
+
+export type KitchenOrderView = OrderView & {
+  customerName: string;
+};
+
+export async function listForKitchen(
+  query: ListKitchenOrdersQuery,
+): Promise<KitchenOrderView[]> {
+  const rows = await getDb().order.findMany({
+    where: query.status
+      ? { status: query.status }
+      : { status: { in: [...ACTIVE_STATUSES] } },
+    include: { items: true, user: { select: { name: true } } },
+    // Oldest first. A kitchen works the queue in the order it arrived, so the
+    // customer who has been waiting longest is at the top of the screen.
+    orderBy: { createdAt: "asc" },
+    take: 100,
+  });
+
+  return rows.map((row) => ({
+    ...toView(row),
+    customerName: row.user.name,
+  }));
+}
+
+/**
+ * Moves an order one step through the kitchen, then announces it.
+ *
+ * The guard is the WHERE clause, not the read above it: `status` is part of the
+ * match, so two staff tapping the same button at once produce one update and
+ * one 409, instead of two updates and two published events.
+ */
+export async function updateStatusFromKitchen(
+  orderId: string,
+  nextStatus: KitchenStatus,
+): Promise<KitchenOrderView> {
+  const db = getDb();
+
+  const existing = await db.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, userId: true, status: true },
+  });
+
+  if (!existing) throw notFound("ORDER_NOT_FOUND", "That order does not exist");
+
+  const { count } = await db.order.updateMany({
+    where: { id: orderId, status: REQUIRED_CURRENT[nextStatus] },
+    data: { status: nextStatus },
+  });
+
+  if (count === 0) {
+    throw conflict(
+      "INVALID_STATUS_TRANSITION",
+      `An order in ${existing.status} cannot be moved to ${nextStatus}`,
+    );
+  }
+
+  // Outside any transaction and after the write, same as order creation: the
+  // database is the source of truth, the event is a notification about it.
+  await publishOrderEvent(
+    STATUS_ROUTING_KEYS[nextStatus],
+    buildOrderStatusChangedEvent({
+      orderId,
+      userId: existing.userId,
+      status: nextStatus,
+      previousStatus: existing.status,
+    }),
+  );
+
+  const updated = await db.order.findUniqueOrThrow({
+    where: { id: orderId },
+    include: { items: true, user: { select: { name: true } } },
+  });
+
+  return { ...toView(updated), customerName: updated.user.name };
 }

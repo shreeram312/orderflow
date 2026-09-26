@@ -9,7 +9,8 @@ export type ErrorCode =
   | "MENU_ITEM_NOT_FOUND"
   | "ITEM_NOT_FOUND"
   | "ORDER_NOT_FOUND"
-  | "INSUFFICIENT_BALANCE";
+  | "INSUFFICIENT_BALANCE"
+  | "INVALID_STATUS_TRANSITION";
 
 export class HttpError extends Error {
   constructor(

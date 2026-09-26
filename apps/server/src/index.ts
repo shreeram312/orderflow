@@ -10,6 +10,7 @@ import { customerMenuRouter } from "./modules/menu/menu.customer.routes";
 import { kitchenMenuRouter } from "./modules/menu/menu.kitchen.routes";
 import { kitchenRestaurantRouter } from "./modules/restaurant/restaurant.kitchen.routes";
 import { customerOrderRouter } from "./modules/orders/order.customer.routes";
+import { kitchenOrderRouter } from "./modules/orders/order.kitchen.routes";
 import { customerWalletRouter } from "./modules/wallet/wallet.customer.routes";
 
 const app = express();
@@ -40,6 +41,8 @@ app.use("/orders", customerOrderRouter);
 
 // Kitchen surface. Each router applies authenticate + requireRole("KITCHEN").
 app.use("/kitchen/menu", kitchenMenuRouter);
+app.use("/kitchen/orders", kitchenOrderRouter);
+// Least specific last, or it would swallow the two paths above.
 app.use("/kitchen", kitchenRestaurantRouter);
 
 app.use(errorHandler);

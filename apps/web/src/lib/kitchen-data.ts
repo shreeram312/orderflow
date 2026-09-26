@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { ENV } from "@/env";
-import type { MenuItem, RestaurantSettings, WalletSummary } from "./api";
+import type { KitchenOrder, MenuItem, RestaurantSettings, WalletSummary } from "./api";
 
 /**
  * Server Components do not forward browser cookies to `fetch`, so the Cookie
@@ -27,6 +27,10 @@ async function serverGet<T>(path: string): Promise<T> {
 
 export function getKitchenMenu() {
   return serverGet<{ items: MenuItem[] }>("/kitchen/menu?includeArchived=true");
+}
+
+export function getKitchenOrders() {
+  return serverGet<{ orders: KitchenOrder[] }>("/kitchen/orders");
 }
 
 export function getRestaurantSettings() {

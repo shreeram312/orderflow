@@ -147,6 +147,12 @@ export type Order = {
   items: OrderLine[];
 };
 
+/** An order as the kitchen board sees it: customer name included. */
+export type KitchenOrder = Order & { customerName: string };
+
+/** The three transitions kitchen staff can drive. */
+export type KitchenStatus = "PREPARING" | "READY" | "COMPLETED";
+
 type AuthResponse = { user: PublicUser };
 
 export const api = {
@@ -230,4 +236,17 @@ export const api = {
     request<{ order: Order }>("/orders", { method: "POST", body: JSON.stringify({ items }) }),
 
   listOrders: () => request<{ orders: Order[] }>("/orders", { method: "GET" }),
+
+  // --- orders (kitchen) ---
+  listKitchenOrders: (status?: OrderStatus) =>
+    request<{ orders: KitchenOrder[] }>(
+      `/kitchen/orders${status ? `?status=${status}` : ""}`,
+      { method: "GET" },
+    ),
+
+  setOrderStatus: (id: string, status: KitchenStatus) =>
+    request<{ order: KitchenOrder }>(`/kitchen/orders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 };
