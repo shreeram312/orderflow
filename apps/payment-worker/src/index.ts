@@ -42,8 +42,90 @@ async function main() {
     QUEUE,
     async (message) => {
       if (!message) return;
+      try {
+        const event = JSON.parse(message.content.toString());
+        console.log("[payment-worker] received", {
+          orderId: event.orderId,
+          reason: event.payload?.reason,
+        });
+
+        const order = await db.order.findUnique({
+          where: {
+            id: event.orderId,
+            select: { id: true, userId: true, status: true, totalAmount: true },
+          },
+        });
+
+        if (!order) {
+          console.log("[payment-worker] order not found", event.orderId);
+          channel.ack(message);
+          return;
+        }
+
+        if (order.status !== "REJECTED" && order.status !== "CANCELLED") {
+          console.log(
+            `[payment-worker] skipped — ${order.id} is ${order.status}`,
+          );
+          channel.ack(message);
+          return;
+        }
+
+        const wallet = await db.wallet.findUnique({
+          where: { userId: order.userId },
+          select: { id: true },
+        });
+
+        if (!wallet) {
+          console.log("[payment-worker] no wallet for", order.userId);
+          channel.ack(message);
+          return;
+        }
+
+        await db.$transaction(async (tx) => {
+          const updated = await tx.wallet.update({
+            where: { id: wallet.id },
+            data: { balance: { increment: order.totalAmount } },
+          });
+
+          // Throws P2002 if a REFUND row for this order already exists.
+          // That rejection is the idempotency guard doing its job.
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              orderId: order.id,
+              type: "REFUND",
+              amount: order.totalAmount,
+              balanceAfter: updated.balance,
+              note: "Order refund",
+            },
+          });
+        });
+
+        console.log(
+          `[payment-worker] refunded ₹${order.totalAmount} to ${order.userId}`,
+        );
+        channel.ack(message);
+      } catch (error) {
+        if (isDuplicate(error)) {
+          console.log("[payment-worker] already refunded, skipping");
+          channel.ack(message);
+          return;
+        }
+
+        console.error("[payment-worker] failed", error);
+        channel.nack(message, false, false);
+      }
     },
     { noAck: false },
+  );
+}
+
+function isDuplicate(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
   );
 }
 
