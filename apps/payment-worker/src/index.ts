@@ -19,6 +19,15 @@ const QUEUE = "orderflow.payments";
 // Two keys, one queue: both of these mean the same thing — money goes back.
 const ROUTING_KEYS = ["order.rejected", "order.cancelled"] as const;
 
+function isDuplicate(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
 async function main() {
   const connection = await amqp.connect(RABBITMQ_URL!);
   const channel = await connection.createChannel();
@@ -52,8 +61,8 @@ async function main() {
         const order = await db.order.findUnique({
           where: {
             id: event.orderId,
-            select: { id: true, userId: true, status: true, totalAmount: true },
           },
+          select: { id: true, userId: true, status: true, totalAmount: true },
         });
 
         if (!order) {
@@ -117,15 +126,6 @@ async function main() {
       }
     },
     { noAck: false },
-  );
-}
-
-function isDuplicate(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "P2002"
   );
 }
 
