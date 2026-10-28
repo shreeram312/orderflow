@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 /**
@@ -19,7 +20,7 @@ export function BrandMark({ className = "size-7" }: { className?: string }) {
   );
 }
 
-export function Brand({ href = "/", caption }: { href?: string; caption?: string }) {
+export function Brand({ href = "/", caption }: { href?: Route; caption?: string }) {
   return (
     <Link href={href} className="flex min-w-0 shrink-0 items-center gap-2.5">
       <BrandMark />

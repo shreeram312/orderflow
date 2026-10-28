@@ -121,7 +121,8 @@ export function MenuBrowser({ initial }: { initial: { isOpen: boolean; items: Me
                 </h2>
                 <span className="text-muted-foreground tabular text-sm">{section.items.length}</span>
               </div>
-              <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+              {/* Cards never get narrower than 280px; columns come and go with the width. */}
+              <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-3">
                 {section.items.map((item) => (
                   <DishCard key={item.id} item={item} />
                 ))}

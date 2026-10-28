@@ -1,11 +1,12 @@
-import { UtensilsCrossed } from "lucide-react";
 import Image from "next/image";
 
+import { BrandMark } from "@/components/shell/brand";
+
 /**
- * Split auth layout: photo-backed branding on the left, form on the right.
+ * Split auth layout: photo on the left, form on the right.
  *
  * The two-column shape exists so the tallest screen (kitchen sign-up, seven
- * fields) fits in one viewport without scrolling. Below `md` the panel
+ * fields) fits in one viewport without scrolling. Below `md` the photo
  * collapses to a short banner and the form stacks beneath it.
  */
 export function AuthShell({
@@ -23,8 +24,8 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-card ring-border/60 grid w-full max-w-4xl overflow-hidden rounded-2xl shadow-xl ring-1 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-      <aside className="relative flex min-h-[190px] flex-col justify-between gap-8 px-8 py-8 md:min-h-0">
+    <div className="bg-card ring-border grid w-full max-w-4xl overflow-hidden rounded-2xl ring-1 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      <aside className="relative flex min-h-[180px] flex-col justify-between gap-8 p-7 md:min-h-0">
         <Image
           src={image}
           alt={imageAlt}
@@ -33,42 +34,33 @@ export function AuthShell({
           sizes="(max-width: 768px) 100vw, 360px"
           className="object-cover"
         />
-        {/* Scrim: dark at both ends so the brand mark and the handwritten line
-            stay readable, deliberately light through the middle so the food is
-            still the thing you see. */}
+        {/* One scrim, dark at the foot where the words sit, so the food stays
+            the thing you see. */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.16) 26%, rgba(0,0,0,0.58) 58%, rgba(0,0,0,0.9) 100%)",
+              "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.85) 100%)",
           }}
         />
 
-        <div className="relative flex items-center gap-2">
-          <UtensilsCrossed className="size-6 text-white" strokeWidth={2.25} />
-          <div>
-            <p className="text-lg leading-none font-extrabold tracking-tight text-white">
-              OrderFlow
-            </p>
-            <p className="mt-1 text-[11px] text-white/85">Good Food. Better Experience.</p>
-          </div>
+        <div className="relative flex items-center gap-2.5">
+          <BrandMark className="size-8 bg-white text-black" />
+          <p className="text-[15px] font-semibold tracking-tight text-white">OrderFlow</p>
         </div>
 
         <div className="relative">{aside}</div>
       </aside>
 
-      <div className="px-8 py-8">{children}</div>
+      <div className="px-6 py-8 sm:px-10">{children}</div>
     </div>
   );
 }
 
-/** Handwritten accent used on the login and staff sign-up panels. */
-export function ScriptLines({ lines }: { lines: string[] }) {
+/** Two or three short lines over the photo. */
+export function Tagline({ lines }: { lines: string[] }) {
   return (
-    <p
-      className="text-[28px] leading-[1.15] font-medium text-white drop-shadow-sm"
-      style={{ fontFamily: "var(--font-script)" }}
-    >
+    <p className="text-[26px] leading-[1.15] font-semibold tracking-tight text-white">
       {lines.map((line) => (
         <span key={line} className="block">
           {line}

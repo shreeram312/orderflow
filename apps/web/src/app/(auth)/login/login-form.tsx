@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { AuthShell, ScriptLines } from "@/components/auth/auth-shell";
+import { AuthShell, Tagline } from "@/components/auth/auth-shell";
 import { FormHeading } from "@/components/auth/brand";
 import { FormError } from "@/components/auth/form-error";
 import { IconField } from "@/components/auth/icon-field";
@@ -53,7 +53,7 @@ export function LoginForm() {
       image="/auth/signin.jpg"
       imageAlt="A colourful salad bowl"
       priority
-      aside={<ScriptLines lines={["Fresh", "Meals", "Happier People"]} />}
+      aside={<Tagline lines={["Fresh", "Meals", "Happier People"]} />}
     >
       <FormHeading title="Welcome Back" subtitle="Sign in to continue to your account" />
 

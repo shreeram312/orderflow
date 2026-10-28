@@ -1,49 +1,29 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@my-better-t-app/ui/components/button";
+import { Input } from "@my-better-t-app/ui/components/input";
+import { Textarea } from "@my-better-t-app/ui/components/textarea";
 
 import { FormError } from "@/components/auth/form-error";
+import { Field, VegMark } from "@/components/shell/bits";
 import { useCreateMenuItem, useUpdateMenuItem } from "@/hooks/use-kitchen";
-import { ApiError, MENU_CATEGORIES, type FieldErrors, type MenuCategory, type MenuItem } from "@/lib/api";
-
-const inputClass =
-  "border-input bg-card focus-visible:border-primary focus-visible:ring-primary/25 h-10 w-full rounded-lg border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none";
-
-function Field({
-  label,
-  htmlFor,
-  errors,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  errors?: string[] | undefined;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid gap-1.5">
-      <label htmlFor={htmlFor} className="text-[13px] font-semibold">
-        {label}
-      </label>
-      {children}
-      {errors?.length ? <p className="text-destructive text-xs leading-tight">{errors[0]}</p> : null}
-    </div>
-  );
-}
+import {
+  ApiError,
+  MENU_CATEGORIES,
+  type FieldErrors,
+  type MenuCategory,
+  type MenuItem,
+} from "@/lib/api";
+import { titleCase } from "@/lib/format";
 
 /** Add and edit share one form — only the request differs. */
-export function MenuItemForm({
-  item,
-  onDone,
-}: {
-  item?: MenuItem | undefined;
-  onDone: () => void;
-}) {
+export function MenuItemForm({ item, onDone }: { item?: MenuItem | undefined; onDone: () => void }) {
   const createItem = useCreateMenuItem();
   const updateItem = useUpdateMenuItem();
+  const [category, setCategory] = useState<MenuCategory>(item?.category ?? "MAINS");
+  const [isVeg, setIsVeg] = useState(item?.isVeg ?? true);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -61,8 +41,8 @@ export function MenuItemForm({
     const input = {
       name: String(data.get("name") ?? "").trim(),
       price: Number(data.get("price")),
-      category: String(data.get("category")) as MenuCategory,
-      isVeg: data.get("isVeg") === "on",
+      category,
+      isVeg,
       prepTimeMinutes: Number(data.get("prepTimeMinutes")),
       // Omit rather than send "" — the server validates these as a URL and a
       // non-empty string, and "" fails both.
@@ -87,89 +67,131 @@ export function MenuItemForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3.5" noValidate>
+    <form onSubmit={onSubmit} className="grid gap-4" noValidate>
       <FormError message={formError} />
 
       <Field label="Name" htmlFor="name" errors={fieldErrors.name}>
-        <input id="name" name="name" defaultValue={item?.name} required className={inputClass} />
+        <Input id="name" name="name" defaultValue={item?.name} required autoFocus={!item} placeholder="Paneer butter masala" />
       </Field>
 
-      <Field label="Description" htmlFor="description" errors={fieldErrors.description}>
-        <input
+      <Field label="Description" htmlFor="description" hint="Optional" errors={fieldErrors.description}>
+        <Textarea
           id="description"
           name="description"
           defaultValue={item?.description ?? ""}
-          placeholder="Optional"
-          className={inputClass}
+          placeholder="A line or two customers will see under the name"
+          className="min-h-16"
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3.5">
-        <Field label="Price (₹)" htmlFor="price" errors={fieldErrors.price}>
-          <input
-            id="price"
-            name="price"
-            type="number"
-            min={1}
-            step="0.01"
-            defaultValue={item?.price}
-            required
-            className={inputClass}
-          />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Price" htmlFor="price" errors={fieldErrors.price}>
+          <div className="relative">
+            <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm">
+              ₹
+            </span>
+            <Input
+              id="price"
+              name="price"
+              type="number"
+              min={1}
+              step="0.01"
+              inputMode="decimal"
+              defaultValue={item?.price}
+              required
+              className="tabular pl-7"
+            />
+          </div>
         </Field>
 
-        <Field label="Prep time (min)" htmlFor="prepTimeMinutes" errors={fieldErrors.prepTimeMinutes}>
-          <input
-            id="prepTimeMinutes"
-            name="prepTimeMinutes"
-            type="number"
-            min={1}
-            max={180}
-            defaultValue={item?.prepTimeMinutes ?? 10}
-            required
-            className={inputClass}
-          />
+        <Field label="Prep time" htmlFor="prepTimeMinutes" errors={fieldErrors.prepTimeMinutes}>
+          <div className="relative">
+            <Input
+              id="prepTimeMinutes"
+              name="prepTimeMinutes"
+              type="number"
+              min={1}
+              max={180}
+              inputMode="numeric"
+              defaultValue={item?.prepTimeMinutes ?? 10}
+              required
+              className="tabular pr-12"
+            />
+            <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm">
+              min
+            </span>
+          </div>
         </Field>
       </div>
 
-      <Field label="Category" htmlFor="category" errors={fieldErrors.category}>
-        <select
-          id="category"
-          name="category"
-          defaultValue={item?.category ?? "MAINS"}
-          className={inputClass}
-        >
-          {MENU_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c.charAt(0) + c.slice(1).toLowerCase()}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="grid gap-1.5">
+        <span className="text-[13px] font-medium">Section</span>
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Section">
+          {MENU_CATEGORIES.map((c) => {
+            const active = category === c;
+            return (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setCategory(c)}
+                className={`h-8 rounded-lg px-3 text-[13px] font-medium ring-1 transition-colors ${
+                  active
+                    ? "bg-foreground text-background ring-foreground"
+                    : "bg-card text-muted-foreground ring-border hover:text-foreground"
+                }`}
+              >
+                {titleCase(c)}
+              </button>
+            );
+          })}
+        </div>
+        {fieldErrors.category?.length ? (
+          <p className="text-destructive text-xs">{fieldErrors.category[0]}</p>
+        ) : null}
+      </div>
 
-      <Field label="Image URL" htmlFor="imageUrl" errors={fieldErrors.imageUrl}>
-        <input
+      <div className="grid gap-1.5">
+        <span className="text-[13px] font-medium">Type</span>
+        <div className="bg-muted grid grid-cols-2 gap-1 rounded-lg p-1" role="radiogroup" aria-label="Type">
+          {[
+            { value: true, label: "Vegetarian" },
+            { value: false, label: "Non-vegetarian" },
+          ].map((option) => {
+            const active = isVeg === option.value;
+            return (
+              <button
+                key={option.label}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setIsVeg(option.value)}
+                className={`flex h-8 items-center justify-center gap-2 rounded-md text-[13px] font-medium transition-colors ${
+                  active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <VegMark isVeg={option.value} className="size-3" />
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Field label="Photo URL" htmlFor="imageUrl" hint="Optional" errors={fieldErrors.imageUrl}>
+        <Input
           id="imageUrl"
           name="imageUrl"
+          type="url"
+          inputMode="url"
           defaultValue={item?.imageUrl ?? ""}
-          placeholder="Optional — https://…"
-          className={inputClass}
+          placeholder="https://…"
         />
       </Field>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="isVeg"
-          defaultChecked={item?.isVeg ?? true}
-          className="accent-primary size-4"
-        />
-        Vegetarian
-      </label>
-
-      <Button type="submit" disabled={pending} className="mt-2 w-full">
-        {pending ? <Loader2 className="animate-spin" /> : null}
-        {pending ? "Saving…" : item ? "Save changes" : "Add item"}
+      <Button type="submit" size="lg" disabled={pending} className="mt-2 w-full">
+        {pending ? "Saving…" : item ? "Save changes" : "Add to menu"}
       </Button>
     </form>
   );

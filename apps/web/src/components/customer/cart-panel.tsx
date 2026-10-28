@@ -78,7 +78,8 @@ function CartContents({ onPlaced }: { onPlaced?: () => void }) {
               type="button"
               onClick={() => remove(item.id)}
               aria-label={`Remove ${item.name}`}
-              className="text-muted-foreground hover:text-destructive -mr-1 p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              // Hover-revealed on desktop; always visible where there is no hover.
+              className="text-muted-foreground hover:text-destructive -mr-1 p-1 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
             >
               <Trash2 className="size-3.5" />
             </button>

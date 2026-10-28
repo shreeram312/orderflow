@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { KitchenHeader } from "@/components/kitchen/kitchen-header";
 import { getSession } from "@/lib/session";
 
 /**
@@ -16,10 +15,5 @@ export default async function KitchenLayout({ children }: { children: React.Reac
   if (!user) redirect("/login");
   if (user.role !== "KITCHEN") redirect("/customer");
 
-  return (
-    <div className="bg-background min-h-svh">
-      <KitchenHeader user={user} />
-      {children}
-    </div>
-  );
+  return <div className="bg-background min-h-svh">{children}</div>;
 }

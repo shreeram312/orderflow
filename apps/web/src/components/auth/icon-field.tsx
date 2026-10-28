@@ -40,14 +40,14 @@ export function IconField({
 
   return (
     <div className={`grid content-start gap-2 ${wrapperClassName ?? ""}`}>
-      <label htmlFor={name} className="text-[13px] font-semibold">
+      <label htmlFor={name} className="text-[13px] font-medium">
         {label}
       </label>
 
       <div
         className={[
-          "bg-card flex h-11 items-center overflow-hidden rounded-lg border",
-          "focus-within:ring-primary/25 focus-within:border-primary focus-within:ring-[3px]",
+          "bg-card flex h-10 items-center overflow-hidden rounded-lg border transition-[border-color,box-shadow]",
+          "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20",
           hasError ? "border-destructive" : "border-input",
         ].join(" ")}
       >

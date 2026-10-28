@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { AuthShell, ScriptLines } from "@/components/auth/auth-shell";
+import { AuthShell, Tagline } from "@/components/auth/auth-shell";
 import { FormHeading } from "@/components/auth/brand";
 import { FormError } from "@/components/auth/form-error";
 import { IconField } from "@/components/auth/icon-field";
@@ -53,7 +53,7 @@ export function CustomerSignupForm() {
     <AuthShell
       image="/auth/pizza.jpg"
       imageAlt="A freshly baked pizza on a wooden board"
-      aside={<ScriptLines lines={["Good Food", "Just a", "Tap Away"]} />}
+      aside={<Tagline lines={["Good Food", "Just a", "Tap Away"]} />}
     >
       <FormHeading
         title="Create Customer Account"
