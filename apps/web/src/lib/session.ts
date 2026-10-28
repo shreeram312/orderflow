@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import { ENV } from "@/env";
 import type { PublicUser } from "./api";
@@ -10,8 +11,11 @@ import type { PublicUser } from "./api";
  * automatically, so the Cookie header has to be copied across by hand.
  * Forgetting this is the classic Next.js auth bug: the same call works in a
  * client component and silently returns 401 in a server one.
+ *
+ * Wrapped in React's `cache` so the layout guard and the page share one
+ * lookup per request instead of each calling /auth/me.
  */
-export async function getSession(): Promise<PublicUser | null> {
+export const getSession = cache(async function getSession(): Promise<PublicUser | null> {
   const cookieHeader = (await cookies()).toString();
   if (!cookieHeader) return null;
 
@@ -33,4 +37,4 @@ export async function getSession(): Promise<PublicUser | null> {
     // API unreachable is treated as signed out rather than a crashed page.
     return null;
   }
-}
+});

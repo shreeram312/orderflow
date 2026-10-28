@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { CartProvider } from "@/components/customer/cart-context";
-import { CustomerHeader } from "@/components/customer/customer-header";
+import { WalletSheetProvider } from "@/components/customer/wallet-sheet";
 import { getSession } from "@/lib/session";
 
 /**
@@ -19,10 +19,9 @@ export default async function CustomerLayout({ children }: { children: React.Rea
 
   return (
     <CartProvider>
-      <div className="bg-background min-h-svh">
-        <CustomerHeader user={user} />
-        {children}
-      </div>
+      <WalletSheetProvider>
+        <div className="bg-background min-h-svh">{children}</div>
+      </WalletSheetProvider>
     </CartProvider>
   );
 }

@@ -1,45 +1,44 @@
-import { Badge } from "@my-better-t-app/ui/components/badge";
-
-import { CartPanel } from "@/components/customer/cart-panel";
+import { CartPanel, MobileCartBar } from "@/components/customer/cart-panel";
+import { CustomerHeader } from "@/components/customer/customer-header";
+import { Greeting } from "@/components/customer/greeting";
 import { MenuBrowser } from "@/components/customer/menu-browser";
-import { OrderStatusPanel } from "@/components/customer/order-status-panel";
-import { PromoBanner } from "@/components/customer/promo-banner";
-import { WalletCard } from "@/components/customer/wallet-card";
+import { OrderTracker } from "@/components/customer/order-tracker";
 import { getCustomerMenu, getWallet } from "@/lib/kitchen-data";
+import { getSession } from "@/lib/session";
 
 export default async function CustomerHomePage() {
   // Fetched on the server so the first paint has data; TanStack Query takes
-  // over from there.
-  const [menu, { wallet }] = await Promise.all([getCustomerMenu(), getWallet()]);
+  // over from there. The layout already proved there is a session.
+  const [user, menu, { wallet }] = await Promise.all([getSession(), getCustomerMenu(), getWallet()]);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-3 py-4 sm:px-4 sm:py-5">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-        <div className="grid gap-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <WalletCard initial={wallet} />
-            <PromoBanner />
+    <>
+      <CustomerHeader user={user!} initialWallet={wallet} initialMenu={menu} />
+
+      <main className="mx-auto max-w-[1440px] px-4 pt-6 pb-28 sm:px-6 lg:pb-10">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] xl:gap-10">
+          <div className="min-w-0">
+            <Greeting name={user!.name} isOpen={menu.isOpen} />
+
+            {/* Phones: the live order sits above the menu, out of the way
+                when there is nothing to track. */}
+            <div className="mb-6 lg:hidden">
+              <OrderTracker hideWhenIdle />
+            </div>
+
+            <MenuBrowser initial={menu} />
           </div>
 
-          {!menu.isOpen ? (
-            <p className="bg-muted/60 text-muted-foreground rounded-lg px-4 py-3 text-sm">
-              The kitchen is closed right now. You can still browse the menu.
-            </p>
-          ) : null}
-
-          <MenuBrowser initial={menu} />
+          <aside className="hidden lg:block">
+            <div className="sticky top-20 grid gap-4">
+              <CartPanel />
+              <OrderTracker />
+            </div>
+          </aside>
         </div>
+      </main>
 
-        <div className="grid content-start gap-4">
-          <div className="flex items-center justify-end">
-            <Badge variant={menu.isOpen ? "success" : "muted"}>
-              {menu.isOpen ? "Open — accepting orders" : "Closed"}
-            </Badge>
-          </div>
-          <CartPanel />
-          <OrderStatusPanel />
-        </div>
-      </div>
-    </div>
+      <MobileCartBar />
+    </>
   );
 }

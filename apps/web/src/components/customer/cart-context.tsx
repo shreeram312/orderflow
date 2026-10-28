@@ -8,8 +8,10 @@ export type CartLine = { item: MenuItem; quantity: number };
 
 type CartValue = {
   lines: CartLine[];
-  /** Distinct dishes, not total units — matches the "Your Cart (3)" label. */
+  /** Distinct dishes in the cart. */
   count: number;
+  /** Total units across all lines — "3 items" on the mobile bar. */
+  units: number;
   total: number;
   quantityOf: (menuItemId: string) => number;
   add: (item: MenuItem) => void;
@@ -62,6 +64,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return {
       lines,
       count: lines.length,
+      units: lines.reduce((sum, line) => sum + line.quantity, 0),
       total: lines.reduce((sum, line) => sum + line.item.price * line.quantity, 0),
       quantityOf: (menuItemId) => quantities.get(menuItemId) ?? 0,
       add,
