@@ -13,6 +13,35 @@ The goal is not to build a complete food-delivery platform. The goal is to demon
 
 ---
 
+# 0. Build Status
+
+All ten phases are built. Where the code departs from the plan below, the code wins and the difference is noted here.
+
+| Process | Path | Consumes | Produces |
+| ------- | ---- | -------- | -------- |
+| API | `apps/server` | HTTP | `order.created`, `order.cancelled`, `order.rejected` (kitchen), `order.preparing` / `ready` / `completed` |
+| Order Worker | `apps/order-worker` | `order.created` | `order.confirmed`, `order.rejected` |
+| Payment Worker | `apps/payment-worker` | `order.rejected`, `order.cancelled` | — (refunds the wallet) |
+| Notification Worker | `apps/notification-worker` | `order.confirmed`, `order.rejected`, `order.preparing`, `order.ready` | — (logs the message it would send) |
+| Web | `apps/web` | HTTP polling | — |
+
+Shared plumbing lives in **`packages/messaging`** (the plan called it `packages/shared`):
+
+- `events.ts` — Zod event contracts and routing keys, validated on every consume.
+- `outbox.ts` — `enqueueEvent(tx, …)` plus the relay that drains `outbox_events` to RabbitMQ. **Nothing publishes directly any more**; the API and the order worker both write events in the same transaction as the state change.
+- `consumer.ts` — `startConsumer(…)`: manual ack, `prefetch(1)`, schema validation, retry ladder (1s → 5s → 15s), dead-letter queue, reconnect, graceful stop.
+- `idempotency.ts` — `processOnce(…)`: the `processed_events` marker written in the same transaction as the work.
+- `connection.ts`, `logger.ts`, `shutdown.ts` — reconnect with backoff, one-JSON-object-per-line logs, SIGTERM handling.
+
+Deliberate departures from the plan:
+
+- **No Kitchen Worker.** Kitchen staff move orders `CONFIRMED → PREPARING → READY → COMPLETED` by hand (`PATCH /kitchen/orders/:id/status`). Each step still emits its own event, which the notification worker picks up.
+- **Retries count attempts in an `x-attempt` header** and re-publish to per-step retry queues, rather than counting `x-death`. Each step has its own queue because RabbitMQ only expires messages from the head of a queue.
+- **Logging is a ~40-line JSON logger**, not Pino. Same fields: `service`, `queue`, `eventId`, `eventType`, `correlationId`, `orderId`, `attempt`, `durationMs`, `err`.
+- **`GET /orders` returns `refundedAt`**, so the customer sees "refund on its way" until the payment worker has actually returned the money.
+
+---
+
 # 1. Project Goals
 
 Demonstrate:
@@ -406,18 +435,23 @@ Consumes `OrderCreated` and decides acceptance against **live** state:
 Accepted: status `CONFIRMED`, publishes `OrderConfirmed`.
 Rejected: status `REJECTED` with a readable reason, publishes `OrderRejected`.
 
-## 8.3 Kitchen Worker
+## 8.3 Kitchen (manual — replaces the Kitchen Worker)
 
-- Consumes `OrderConfirmed`.
-- Sets status `PREPARING`.
-- Simulates preparation for `KITCHEN_PREP_TIME_MS`.
-- Sets status `READY`.
+- Kitchen staff advance each ticket by hand: `PREPARING`, `READY`, `COMPLETED`.
+- Each transition is a compare-and-set on the previous status and enqueues its own event (`order.preparing`, `order.ready`, `order.completed`).
+- Staff can reject an order while it is `PENDING` or `CONFIRMED`; that emits the same `order.rejected` as an automatic rejection.
 
 ## 8.4 Payment Worker (Phase 9)
 
 - Consumes `OrderRejected` and `OrderCancelled`.
-- Refunds the wallet and writes a `REFUND` ledger row.
-- Idempotent: a redelivered event must not refund twice.
+- Refunds the wallet and writes a `REFUND` ledger row, using `userId` and `refundAmount` from the event — it never reads the orders table.
+- Idempotent twice over: `processed_events` per event, `@@unique([orderId, type])` per order.
+
+## 8.5 Notification Worker
+
+- Consumes `order.confirmed`, `order.rejected`, `order.preparing`, `order.ready`.
+- Logs the message it would send the customer. Idempotent, so a redelivery does not notify twice.
+- Added without touching any producer — the reason the exchange is a topic exchange.
 
 ---
 
@@ -556,8 +590,8 @@ Terminal branches: `CANCELLED` and `REJECTED`.
 | ----------- | -------------------------------------------------- | ----------------------------- |
 | `PENDING`   | Created and paid, awaiting the restaurant's decision | Order API                     |
 | `CONFIRMED` | Restaurant accepted the order                       | Order Worker                  |
-| `PREPARING` | Kitchen started cooking                             | Kitchen Worker                |
-| `READY`     | Waiting for pickup                                  | Kitchen Worker                |
+| `PREPARING` | Kitchen started cooking                             | Kitchen staff                 |
+| `READY`     | Waiting for pickup                                  | Kitchen staff                 |
 | `COMPLETED` | Customer collected the order                        | Kitchen staff                 |
 | `CANCELLED` | Cancelled by the customer, wallet refunded          | Order API / Payment Worker    |
 | `REJECTED`  | Restaurant cannot fulfill it, wallet refunded       | Order Worker / Kitchen staff  |
@@ -881,14 +915,27 @@ order.ready
 ```text
 orderflow.orders          <- order.created
 
-orderflow.kitchen         <- order.confirmed
-
 orderflow.payments        <- order.rejected      (refund)
                           <- order.cancelled     (refund)
 
-orderflow.notifications   <- order.ready         (Phase 10)
-                          <- order.rejected      (Phase 10)
+orderflow.notifications   <- order.confirmed
+                          <- order.rejected
+                          <- order.preparing
+                          <- order.ready
 ```
+
+Every work queue also gets a retry ladder and a dead-letter queue, declared by `startConsumer`:
+
+```text
+<queue>.retry.1   TTL 1s   --expires--> <queue>   (via the default exchange)
+<queue>.retry.2   TTL 5s   --expires--> <queue>
+<queue>.retry.3   TTL 15s  --expires--> <queue>
+<queue>.dlq                kept for a human to inspect
+```
+
+Expired retries return through the **default** exchange straight to their own queue, not through `orderflow.events` — otherwise a payments retry of `order.rejected` would also be re-delivered to notifications.
+
+`order.completed` is published but nothing binds to it yet. RabbitMQ drops unrouted messages, which is correct: an event nobody subscribes to is not an error.
 
 `order.rejected` binding to **two** queues is the point of using a topic exchange rather than publishing straight to a queue. One event, two independent reactions — the Payment Worker returns the money, the Notification Worker tells the customer — and neither knows the other exists. A third consumer is added later by declaring one more binding, with no change to the producer.
 
@@ -1039,7 +1086,7 @@ Note what step 4 does **not** check: whether the item is `PAUSED`, and whether t
 
 Steps 7 to 12 must be one transaction. A debit that commits without an order, or an order that commits without a debit, is free food in one direction and theft in the other.
 
-Step 13 sits outside the transaction, which creates a real gap: the commit can succeed and the publish can fail, leaving an order that no worker will ever pick up. That is exactly the problem the **Outbox Pattern** in Phase 10 solves. Until then, the gap is known and accepted — a stuck `PENDING` order is recoverable by hand.
+Step 13 used to sit outside the transaction, which created a real gap: the commit could succeed and the publish fail, leaving an order that no worker would ever pick up. The **Outbox Pattern** (Phase 10) closes it — step 13 is now "insert into `outbox_events`" *inside* the transaction, and a relay publishes the row once the broker confirms it. The API now keeps taking orders even while RabbitMQ is down.
 
 ---
 
@@ -1406,7 +1453,7 @@ Run workers in **separate terminals** rather than through `pnpm dev` while learn
 
 Deliberately small steps. Each phase ends with something that runs.
 
-## Phase 1 — Setup
+## Phase 1 — Setup — ✅
 
 - pnpm workspace, `tsconfig.base.json`
 - `apps/api`, `apps/web`, `packages/shared`
@@ -1415,7 +1462,7 @@ Deliberately small steps. Each phase ends with something that runs.
 - Seed script: one kitchen user, one customer with a funded wallet, a few menu items
 - `GET /health` returning `200`
 
-## Phase 2 — Authentication
+## Phase 2 — Authentication — ✅
 
 - Signup, login, logout, `/auth/me`
 - argon2 hashing, JWT in an httpOnly cookie
@@ -1423,7 +1470,7 @@ Deliberately small steps. Each phase ends with something that runs.
 - Kitchen signup gated by `KITCHEN_SIGNUP_CODE`
 - Login and signup screens, `AuthContext`, protected routes
 
-## Phase 3 — Wallet and Menu
+## Phase 3 — Wallet and Menu — ✅
 
 - Wallet balance, top up, transaction list
 - Customer `GET /menu`
@@ -1431,7 +1478,7 @@ Deliberately small steps. Each phase ends with something that runs.
 - Restaurant open/closed toggle
 - Wallet page and kitchen Menu tab
 
-## Phase 4 — Order flow, fully synchronous
+## Phase 4 — Order flow, fully synchronous — ✅
 
 No RabbitMQ yet. Everything in one process.
 
@@ -1443,7 +1490,7 @@ No RabbitMQ yet. Everything in one process.
 
 The point of building this first is to have a working baseline. Phase 6 pulls it apart, and the difference is the lesson.
 
-## Phase 5 — Both UIs
+## Phase 5 — Both UIs — ✅
 
 - Menu, cart, place order, order detail with status timeline, order history
 - Kitchen order queue with time-since-placed, Reject, Mark Ready, Mark Collected
@@ -1451,7 +1498,7 @@ The point of building this first is to have a working baseline. Phase 6 pulls it
 
 **At this point the application is complete and usable.** Everything after this is about how the work is coordinated.
 
-## Phase 6 — First event
+## Phase 6 — First event — ✅
 
 - RabbitMQ connection helper with reconnect
 - Declare the topic exchange and the `orderflow.orders` queue
@@ -1460,12 +1507,12 @@ The point of building this first is to have a working baseline. Phase 6 pulls it
 
 The customer now sees `PENDING` before `CONFIRMED`. That visible gap is eventual consistency, and it is the moment the project starts being about what it claims to be about.
 
-## Phase 7 — Second worker
+## Phase 7 — Second worker — ✅ (manual kitchen instead of a Kitchen Worker)
 
 - Publish `OrderConfirmed` and `OrderRejected`
 - Kitchen Worker consumes `OrderConfirmed`, sets `PREPARING`, waits `KITCHEN_PREP_TIME_MS`, sets `READY`
 
-## Phase 8 — Reliability
+## Phase 8 — Reliability — ✅
 
 - Manual ACK with `prefetch(1)`
 - `processed_events` and idempotent consumers
@@ -1473,13 +1520,13 @@ The customer now sees `PENDING` before `CONFIRMED`. That visible gap is eventual
 - Graceful shutdown on `SIGTERM`: stop consuming, finish the in-flight message, close the channel
 - `GET /health/ready` checking database and broker
 
-## Phase 9 — Compensation
+## Phase 9 — Compensation — ✅
 
 - Payment Worker consuming `order.rejected` and `order.cancelled`
 - Rejection and cancellation stop refunding inline and publish instead
 - The refund now happens in a different service than the debit
 
-## Phase 10 — Advanced
+## Phase 10 — Advanced — ✅ outbox, retry + DLQ, notification worker
 
 Pick from the backlog in section 27. Do not attempt all of it.
 
