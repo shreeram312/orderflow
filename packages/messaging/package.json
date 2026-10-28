@@ -1,0 +1,24 @@
+{
+  "name": "@my-better-t-app/messaging",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@my-better-t-app/db": "workspace:*",
+    "amqplib": "^2.0.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@my-better-t-app/config": "workspace:*",
+    "@types/amqplib": "^0.10.8",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

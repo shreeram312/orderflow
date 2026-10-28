@@ -1,10 +1,11 @@
 "use client";
 
-import { ClipboardList } from "lucide-react";
+import { CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
+import { Button } from "@my-better-t-app/ui/components/button";
 
-import { useOrders } from "@/hooks/use-customer";
+import { isRefundPending, useCancelOrder, useOrders } from "@/hooks/use-customer";
 import type { OrderStatus } from "@/lib/api";
 
 /** The happy path in order; terminal states are rendered separately. */
@@ -28,6 +29,7 @@ const STATUS_VARIANT: Record<OrderStatus, "success" | "warning" | "muted" | "des
 
 export function OrderStatusPanel() {
   const { data: orders = [] } = useOrders();
+  const cancel = useCancelOrder();
   const latest = orders[0];
 
   return (
@@ -58,9 +60,26 @@ export function OrderStatusPanel() {
           </div>
 
           {latest.status === "REJECTED" || latest.status === "CANCELLED" ? (
-            <p className="text-muted-foreground mt-3 text-xs">
-              {latest.failureReason ?? "This order did not go through. Your wallet was refunded."}
-            </p>
+            <div className="mt-3 grid gap-1.5 text-xs">
+              <p className="text-muted-foreground">
+                {latest.status === "CANCELLED"
+                  ? "You cancelled this order."
+                  : (latest.failureReason ?? "The restaurant could not take this order.")}
+              </p>
+              {/* Two moments, not one: the status flips first, the payment
+                  worker returns the money a beat later. Show both honestly. */}
+              {isRefundPending(latest) ? (
+                <p className="inline-flex items-center gap-1.5 font-medium text-orange-600">
+                  <Loader2 className="size-3 animate-spin" />
+                  Refund of ₹{latest.totalAmount.toLocaleString()} on its way…
+                </p>
+              ) : (
+                <p className="inline-flex items-center gap-1.5 font-medium text-emerald-600">
+                  <CheckCircle2 className="size-3" />₹{latest.totalAmount.toLocaleString()} refunded
+                  to your wallet
+                </p>
+              )}
+            </div>
           ) : (
             <ol className="mt-4 grid gap-2.5">
               {STEPS.map((step, index) => {
@@ -96,6 +115,21 @@ export function OrderStatusPanel() {
             <p className="text-muted-foreground mt-3 text-[11px] leading-tight">
               Waiting on the kitchen to pick this up.
             </p>
+          ) : null}
+
+          {/* Cancellable until cooking starts. The server re-checks — this
+              button can be stale by up to one poll. */}
+          {latest.status === "PENDING" || latest.status === "CONFIRMED" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 w-full"
+              disabled={cancel.isPending}
+              onClick={() => cancel.mutate(latest.id)}
+            >
+              {cancel.isPending ? "Cancelling…" : "Cancel order"}
+            </Button>
           ) : null}
         </>
       )}

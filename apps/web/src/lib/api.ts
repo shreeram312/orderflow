@@ -147,6 +147,10 @@ export type Order = {
   items: OrderLine[];
 };
 
+/** A customer's own order. `refundedAt` is set once the payment worker has
+ *  put the money back — which happens shortly AFTER the status flips. */
+export type CustomerOrder = Order & { refundedAt: string | null };
+
 /** An order as the kitchen board sees it: customer name included. */
 export type KitchenOrder = Order & { customerName: string };
 
@@ -233,9 +237,12 @@ export const api = {
 
   // --- orders (customer) ---
   createOrder: (items: { menuItemId: string; quantity: number }[]) =>
-    request<{ order: Order }>("/orders", { method: "POST", body: JSON.stringify({ items }) }),
+    request<{ order: CustomerOrder }>("/orders", { method: "POST", body: JSON.stringify({ items }) }),
 
-  listOrders: () => request<{ orders: Order[] }>("/orders", { method: "GET" }),
+  listOrders: () => request<{ orders: CustomerOrder[] }>("/orders", { method: "GET" }),
+
+  cancelOrder: (id: string) =>
+    request<{ order: CustomerOrder }>(`/orders/${id}/cancel`, { method: "POST" }),
 
   // --- orders (kitchen) ---
   listKitchenOrders: (status?: OrderStatus) =>
@@ -248,5 +255,11 @@ export const api = {
     request<{ order: KitchenOrder }>(`/kitchen/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    }),
+
+  rejectOrder: (id: string, reason?: string) =>
+    request<{ order: KitchenOrder }>(`/kitchen/orders/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify(reason ? { reason } : {}),
     }),
 };

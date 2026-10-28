@@ -3,10 +3,21 @@
 import { Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@my-better-t-app/ui/components/alert-dialog";
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
+import { Textarea } from "@my-better-t-app/ui/components/textarea";
 
-import { NEXT_ACTION, useSetOrderStatus } from "@/hooks/use-kitchen-orders";
+import { NEXT_ACTION, useRejectOrder, useSetOrderStatus } from "@/hooks/use-kitchen-orders";
 import type { KitchenOrder, OrderStatus } from "@/lib/api";
 
 const STATUS_VARIANT: Partial<
@@ -37,6 +48,9 @@ function useWaitingMinutes(createdAt: string) {
 export function OrderTicket({ order }: { order: KitchenOrder }) {
   const waiting = useWaitingMinutes(order.createdAt);
   const setStatus = useSetOrderStatus();
+  const reject = useRejectOrder();
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reason, setReason] = useState("");
   const action = NEXT_ACTION[order.status];
 
   // Disable only the ticket being changed, so two staff can work in parallel.
@@ -83,19 +97,63 @@ export function OrderTicket({ order }: { order: KitchenOrder }) {
       </div>
 
       {action ? (
-        <Button
-          type="button"
-          size="sm"
-          // Solid only on the last step, so the eye lands on tickets ready
-          // to leave the pass rather than on every card at once.
-          variant={order.status === "READY" ? "default" : "outline"}
-          className="mt-2.5 w-full"
-          disabled={isBusy}
-          onClick={() => setStatus.mutate({ id: order.id, status: action.status })}
-        >
-          {isBusy ? "Saving…" : action.label}
-        </Button>
+        <div className="mt-2.5 flex gap-2">
+          {/* Rejection is only possible before cooking starts. */}
+          {order.status === "CONFIRMED" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              disabled={isBusy || reject.isPending}
+              onClick={() => setRejectOpen(true)}
+            >
+              Reject
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            // Solid only on the last step, so the eye lands on tickets ready
+            // to leave the pass rather than on every card at once.
+            variant={order.status === "READY" ? "default" : "outline"}
+            className="flex-1"
+            disabled={isBusy || reject.isPending}
+            onClick={() => setStatus.mutate({ id: order.id, status: action.status })}
+          >
+            {isBusy ? "Saving…" : action.label}
+          </Button>
+        </div>
       ) : null}
+
+      <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject {order.customerName}&apos;s order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They will be refunded ₹{order.totalAmount} automatically. The reason below is shown
+              to them as-is.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={200}
+            placeholder="e.g. We've run out of paneer"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep order</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                reject.mutate({ id: order.id, reason: reason.trim() || undefined })
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reject and refund
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </article>
   );
 }

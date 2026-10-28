@@ -1,9 +1,11 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { initBroker } from "./infra/rabbitmq";
+import { onShutdown } from "@my-better-t-app/messaging";
+import { initBroker, isBrokerConnected, log, stopBroker } from "./infra/rabbitmq";
 import { env } from "./env.server";
 import { ok } from "./lib/response";
+import { correlationId } from "./middleware/correlation-id";
 import { errorHandler } from "./middleware/error-handler";
 import { authRouter } from "./modules/auth/auth.routes";
 import { customerMenuRouter } from "./modules/menu/menu.customer.routes";
@@ -12,8 +14,12 @@ import { kitchenRestaurantRouter } from "./modules/restaurant/restaurant.kitchen
 import { customerOrderRouter } from "./modules/orders/order.customer.routes";
 import { kitchenOrderRouter } from "./modules/orders/order.kitchen.routes";
 import { customerWalletRouter } from "./modules/wallet/wallet.customer.routes";
+import { getDb } from "./services";
 
 const app = express();
+
+// First, so even a CORS rejection is logged with an id.
+app.use(correlationId);
 
 app.use(
   cors({
@@ -22,14 +28,36 @@ app.use(
     // Without it the browser silently drops the cookie and every request is 401.
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    exposedHeaders: ["x-correlation-id"],
   }),
 );
 
 app.use(express.json());
 app.use(cookieParser());
 
+/** Liveness: the process is up. Says nothing about its dependencies. */
 app.get("/health", (_req, res) => {
   ok(res, { uptime: process.uptime() });
+});
+
+/**
+ * Readiness: can this instance actually do its job? With five processes
+ * running, "why is my order stuck" has five answers — this rules out two.
+ *
+ * The broker being down is reported but does not stop orders: they wait in
+ * the outbox. The database being down does.
+ */
+app.get("/health/ready", async (_req, res) => {
+  const database = await getDb()
+    .$queryRaw`SELECT 1`.then(() => true)
+    .catch(() => false);
+  const broker = isBrokerConnected();
+
+  res.status(database ? 200 : 503).json({
+    status: database,
+    message: database ? "Ready" : "Database unreachable",
+    data: { database, broker },
+  });
 });
 
 app.use("/auth", authRouter);
@@ -47,8 +75,17 @@ app.use("/kitchen", kitchenRestaurantRouter);
 
 app.use(errorHandler);
 
-await initBroker();
+initBroker();
 
-app.listen(3000, () => {
-  console.log("Server is running on http://localhost:3000");
+const server = app.listen(3000, () => {
+  log.info("listening", { url: "http://localhost:3000" });
+});
+
+onShutdown(log, async () => {
+  // Stop accepting requests and let in-flight ones finish, then flush what
+  // the outbox can before disconnecting. Anything left stays in the table
+  // for the next start.
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await stopBroker();
+  await getDb().$disconnect();
 });

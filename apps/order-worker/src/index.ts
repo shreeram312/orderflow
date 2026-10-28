@@ -1,151 +1,125 @@
-import amqp from "amqplib";
 import { createPrismaClient } from "@my-better-t-app/db";
+import {
+  OrderCreatedSchema,
+  type OrderConfirmed,
+  type OrderRejected,
+  ROUTING_KEYS,
+  buildEvent,
+  createLogger,
+  enqueueEvent,
+  onShutdown,
+  processOnce,
+  startConsumer,
+  startOutboxRelay,
+} from "@my-better-t-app/messaging";
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const { DATABASE_URL, RABBITMQ_URL, RABBITMQ_EXCHANGE } = process.env;
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is not set — check apps/order-worker/.env");
 }
+if (!RABBITMQ_URL || !RABBITMQ_EXCHANGE) {
+  throw new Error("RABBITMQ_URL / RABBITMQ_EXCHANGE are not set — check apps/order-worker/.env");
+}
+
+const SERVICE = "order-worker";
+const QUEUE = "orderflow.orders";
 
 const db = createPrismaClient({ DATABASE_URL });
+const log = createLogger(SERVICE);
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL;
-const RABBITMQ_EXCHANGE = process.env.RABBITMQ_EXCHANGE;
+/**
+ * The worker is a producer too. Its follow-up events go through the outbox
+ * like the API's do, so "order is CONFIRMED" and "OrderConfirmed exists"
+ * commit together. This relay and the API's share the table safely.
+ */
+const relay = startOutboxRelay({ db, url: RABBITMQ_URL, exchange: RABBITMQ_EXCHANGE, log });
 
-if (!RABBITMQ_URL) {
-  throw new Error("RABBITMQ_URL is not set — check apps/order-worker/.env");
-}
+const consumer = startConsumer({
+  url: RABBITMQ_URL,
+  exchange: RABBITMQ_EXCHANGE,
+  queue: QUEUE,
+  routingKeys: [ROUTING_KEYS.orderCreated],
+  schema: OrderCreatedSchema,
+  log,
 
-const QUEUE = "orderflow.orders";
-const ROUTING_KEY = "order.created";
+  async handle(event, { log }) {
+    // Read LIVE state — not what the customer's page said when they ordered.
+    const [settings, menuItems] = await Promise.all([
+      db.restaurantSettings.findUnique({ where: { id: "singleton" } }),
+      db.menuItem.findMany({
+        where: { id: { in: event.payload.items.map((i) => i.menuItemId) } },
+        select: { id: true, name: true, status: true },
+      }),
+    ]);
 
-// The worker is a producer too — these are the events it emits.
-const ROUTING_KEYS = {
-  orderConfirmed: "order.confirmed",
-  orderRejected: "order.rejected",
-} as const;
+    const unavailable = menuItems.find((m) => m.status !== "ACTIVE");
 
-async function main() {
-  const connection = await amqp.connect(RABBITMQ_URL!);
-  const channel = await connection.createChannel();
-  console.log("Channel Opened Succesfully");
+    const rejection: Pick<OrderRejected["payload"], "reason" | "message"> | null =
+      !settings?.isOpen
+        ? { reason: "RESTAURANT_CLOSED", message: "Restaurant is closed" }
+        : unavailable
+          ? { reason: "ITEM_UNAVAILABLE", message: `${unavailable.name} is currently unavailable` }
+          : null;
 
-  await channel.assertExchange(RABBITMQ_EXCHANGE!, "topic", { durable: true });
-  const { messageCount } = await channel.assertQueue(QUEUE, { durable: true });
-  await channel.bindQueue(QUEUE, RABBITMQ_EXCHANGE!, ROUTING_KEY);
-  console.log(
-    `[order-worker] ready — ${messageCount} message(s) waiting in ${QUEUE}`,
-  );
+    const outcome = await processOnce(db, SERVICE, event.eventId, async (tx) => {
+      // The guard: only a PENDING order can be decided. If the customer
+      // cancelled first (or the kitchen rejected it), zero rows match and
+      // this worker quietly steps aside.
+      const { count } = await tx.order.updateMany({
+        where: { id: event.orderId, status: "PENDING" },
+        data: rejection
+          ? { status: "REJECTED", failureReason: rejection.message }
+          : { status: "CONFIRMED" },
+      });
 
-  await channel.consume(
-    QUEUE,
-    async (message) => {
-      if (!message) return;
+      if (count === 0) return "skipped" as const;
 
-      try {
-        const event = JSON.parse(message.content.toString());
+      const base = { orderId: event.orderId, correlationId: event.correlationId };
+      const { userId, totalAmount } = event.payload;
 
-        console.log("[order-worker] received", {
-          orderId: event.orderId,
-          total: event.payload.totalAmount,
-        });
-
-        const order = await db.order.findUnique({
-          where: { id: event.orderId },
-          select: {
-            id: true,
-            status: true,
-            totalAmount: true,
-            items: { select: { menuItemId: true, name: true } },
-          },
-        });
-
-        console.log("[order-worker] found order", {
-          orderId: event.orderId,
-          status: order?.status ?? "NOT FOUND",
-        });
-
-        if (!order) {
-          console.log("[order-worker] order not found", event.orderId);
-          channel.ack(message);
-          return;
-        }
-
-        // Read LIVE state — not what the customer's page said.
-        const settings = await db.restaurantSettings.findUnique({
-          where: { id: "singleton" },
-        });
-
-        const menuItems = await db.menuItem.findMany({
-          where: { id: { in: order.items.map((i) => i.menuItemId) } },
-          select: { id: true, name: true, status: true },
-        });
-
-        const unavailable = menuItems.filter((m) => m.status !== "ACTIVE");
-
-        let nextStatus: "CONFIRMED" | "REJECTED" = "CONFIRMED";
-        let failureReason: string | null = null;
-
-        if (!settings?.isOpen) {
-          nextStatus = "REJECTED";
-          failureReason = "Restaurant is closed";
-        } else if (unavailable.length > 0) {
-          nextStatus = "REJECTED";
-          failureReason = `${unavailable[0]!.name} is currently unavailable`;
-        }
-
-        const updated = await db.order.updateMany({
-          where: { id: event.orderId, status: "PENDING" },
-          data: { status: nextStatus, failureReason },
-        });
-
-        console.log(
-          updated.count === 0
-            ? `[order-worker] skipped — not PENDING ${event.orderId}`
-            : `[order-worker] ${nextStatus} ${event.orderId}${failureReason ? ` — ${failureReason}` : ""}`,
+      if (rejection) {
+        await enqueueEvent(
+          tx,
+          ROUTING_KEYS.orderRejected,
+          buildEvent<OrderRejected>({
+            ...base,
+            eventType: "OrderRejected",
+            payload: { userId, ...rejection, refundAmount: totalAmount },
+          }),
         );
-
-        // Only publish when we actually changed the order. count === 0 means a
-        // cancel or a redelivery got here first — publishing anyway would make
-        // every downstream worker run a second time.
-        if (updated.count > 0) {
-          const followUp = {
-            eventId: crypto.randomUUID(),
-            eventType:
-              nextStatus === "CONFIRMED" ? "OrderConfirmed" : "OrderRejected",
-            occurredAt: new Date().toISOString(),
-            orderId: event.orderId,
-            payload: {
-              userId: event.payload.userId,
-              totalAmount: event.payload.totalAmount,
-              ...(failureReason ? { reason: failureReason } : {}),
-            },
-          };
-
-          const followUpKey =
-            nextStatus === "CONFIRMED"
-              ? ROUTING_KEYS.orderConfirmed
-              : ROUTING_KEYS.orderRejected;
-
-          channel.publish(
-            RABBITMQ_EXCHANGE!,
-            followUpKey,
-            Buffer.from(JSON.stringify(followUp)),
-            { persistent: true, contentType: "application/json" },
-          );
-
-          console.log("[order-worker] published", followUpKey, event.orderId);
-        }
-
-        channel.ack(message);
-      } catch (error) {
-        console.error("[order-worker] failed", error);
-
-        channel.nack(message, false, false);
+        return "rejected" as const;
       }
-    },
-    { noAck: false },
-  );
-}
 
-void main();
+      await enqueueEvent(
+        tx,
+        ROUTING_KEYS.orderConfirmed,
+        buildEvent<OrderConfirmed>({
+          ...base,
+          eventType: "OrderConfirmed",
+          payload: { userId, totalAmount },
+        }),
+      );
+      return "confirmed" as const;
+    });
+
+    if (outcome.duplicate) {
+      log.info("duplicate delivery — already decided");
+      return;
+    }
+
+    if (outcome.result === "skipped") {
+      log.info("skipped — order is no longer PENDING");
+      return;
+    }
+
+    relay.wake();
+    log.info(`order ${outcome.result}`, rejection ? { reason: rejection.message } : {});
+  },
+});
+
+onShutdown(log, async () => {
+  await consumer.stop();
+  await relay.stop();
+  await db.$disconnect();
+});

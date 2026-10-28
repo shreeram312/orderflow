@@ -12,3 +12,5 @@ kitchenOrderRouter.use(authenticate, requireRole("KITCHEN"));
 kitchenOrderRouter.get("/", controller.listOrders);
 // One step at a time: CONFIRMED -> PREPARING -> READY -> COMPLETED.
 kitchenOrderRouter.patch("/:id/status", controller.updateOrderStatus);
+// Off-ramp before cooking starts: PENDING or CONFIRMED -> REJECTED, refunded.
+kitchenOrderRouter.patch("/:id/reject", controller.rejectOrder);

@@ -14,9 +14,23 @@ function userId(req: Request): string {
 export async function createOrder(req: Request, res: Response, next: NextFunction) {
   try {
     const input = parse(createOrderSchema, req.body);
-    const order = await orderService.createOrder(userId(req), input);
+    const order = await orderService.createOrder(userId(req), input, req.correlationId);
 
     created(res, { order }, "Order placed");
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function cancelOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const order = await orderService.cancelOrder(
+      userId(req),
+      String(req.params.id),
+      req.correlationId,
+    );
+
+    ok(res, { order }, "Order cancelled. Your refund is on its way");
   } catch (error) {
     next(error);
   }

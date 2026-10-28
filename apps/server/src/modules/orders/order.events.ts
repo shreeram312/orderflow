@@ -1,101 +1,71 @@
-import { env } from "@/env.server";
-import { getChannel } from "@/infra/rabbitmq";
+import {
+  type KitchenStatus,
+  type OrderCancelled,
+  type OrderCreated,
+  type OrderRejected,
+  type OrderStatusChanged,
+  buildEvent,
+} from "@my-better-t-app/messaging";
 
-export const ROUTING_KEYS = {
-  orderCreated: "order.created",
-  orderPreparing: "order.preparing",
-  orderReady: "order.ready",
-  orderCompleted: "order.completed",
-} as const;
+/**
+ * The events the API emits. Contracts and routing keys live in
+ * @my-better-t-app/messaging so the workers validate against the exact same
+ * shapes; this file only fills them in from the API's side.
+ *
+ * Nothing here publishes. Events are handed to `enqueueEvent` inside the
+ * transaction that made the change, and the outbox relay takes it from there.
+ */
 
-/** The statuses kitchen staff may set by hand. */
-export type KitchenStatus = "PREPARING" | "READY" | "COMPLETED";
-
-/** Each kitchen transition gets its own routing key, so a consumer can bind to
- *  just the one it cares about instead of filtering in code. */
-export const STATUS_ROUTING_KEYS: Record<KitchenStatus, string> = {
-  PREPARING: ROUTING_KEYS.orderPreparing,
-  READY: ROUTING_KEYS.orderReady,
-  COMPLETED: ROUTING_KEYS.orderCompleted,
-};
-
-export type OrderCreatedEvent = {
-  eventId: string;
-  eventType: "OrderCreated";
-  occurredAt: string;
+export function orderCreated(input: {
   orderId: string;
-  payload: {
-    userId: string;
-    totalAmount: number;
-    items: { menuItemId: string; name: string; quantity: number }[];
-  };
-};
-
-export type OrderStatusChangedEvent = {
-  eventId: string;
-  eventType: "OrderStatusChanged";
-  occurredAt: string;
-  orderId: string;
-  payload: {
-    userId: string;
-    status: KitchenStatus;
-    previousStatus: string;
-  };
-};
-
-export type OrderEvent = OrderCreatedEvent | OrderStatusChangedEvent;
-
-export function buildOrderCreatedEvent(input: {
-  orderId: string;
+  correlationId: string;
   userId: string;
   totalAmount: number;
-  items: { menuItemId: string; name: string; quantity: number }[];
-}): OrderCreatedEvent {
-  return {
-    eventId: crypto.randomUUID(),
-    eventType: "OrderCreated",
-    occurredAt: new Date().toISOString(),
-    orderId: input.orderId,
-    payload: {
-      userId: input.userId,
-      totalAmount: input.totalAmount,
-      items: input.items,
-    },
-  };
+  items: OrderCreated["payload"]["items"];
+}): OrderCreated {
+  const { orderId, correlationId, ...payload } = input;
+  return buildEvent<OrderCreated>({ eventType: "OrderCreated", orderId, correlationId, payload });
 }
 
-export function buildOrderStatusChangedEvent(input: {
+export function orderStatusChanged(input: {
   orderId: string;
+  correlationId: string;
   userId: string;
   status: KitchenStatus;
   previousStatus: string;
-}): OrderStatusChangedEvent {
-  return {
-    eventId: crypto.randomUUID(),
+}): OrderStatusChanged {
+  const { orderId, correlationId, ...payload } = input;
+  return buildEvent<OrderStatusChanged>({
     eventType: "OrderStatusChanged",
-    occurredAt: new Date().toISOString(),
-    orderId: input.orderId,
-    payload: {
-      userId: input.userId,
-      status: input.status,
-      previousStatus: input.previousStatus,
-    },
-  };
+    orderId,
+    correlationId,
+    payload,
+  });
 }
 
-/**
- * The routing key is a parameter rather than baked in, because the API now
- * emits four different events. The exchange decides who receives them; this
- * function only decides what to call the envelope.
- */
-export async function publishOrderEvent(
-  routingKey: string,
-  event: OrderEvent,
-): Promise<void> {
-  getChannel().publish(
-    env.RABBITMQ_EXCHANGE,
-    routingKey,
-    Buffer.from(JSON.stringify(event)),
-    { persistent: true, contentType: "application/json" },
-  );
+export function orderCancelled(input: {
+  orderId: string;
+  correlationId: string;
+  userId: string;
+  cancelledAtStatus: OrderCancelled["payload"]["cancelledAtStatus"];
+  refundAmount: number;
+}): OrderCancelled {
+  const { orderId, correlationId, ...payload } = input;
+  return buildEvent<OrderCancelled>({ eventType: "OrderCancelled", orderId, correlationId, payload });
+}
+
+export function orderRejectedByKitchen(input: {
+  orderId: string;
+  correlationId: string;
+  userId: string;
+  message: string;
+  refundAmount: number;
+}): OrderRejected {
+  const { orderId, correlationId, ...rest } = input;
+  return buildEvent<OrderRejected>({
+    eventType: "OrderRejected",
+    orderId,
+    correlationId,
+    payload: { ...rest, reason: "REJECTED_BY_KITCHEN" },
+  });
 }

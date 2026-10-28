@@ -5,6 +5,7 @@ import { ok } from "../../lib/response";
 import * as orderService from "./order.service";
 import {
   listKitchenOrdersQuerySchema,
+  rejectOrderSchema,
   updateOrderStatusSchema,
 } from "./order.schemas";
 
@@ -31,9 +32,29 @@ export async function updateOrderStatus(
     const order = await orderService.updateStatusFromKitchen(
       String(req.params.id),
       status,
+      req.correlationId,
     );
 
     ok(res, { order }, `Order marked ${status.toLowerCase()}`);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function rejectOrder(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { reason } = parse(rejectOrderSchema, req.body ?? {});
+    const order = await orderService.rejectFromKitchen(
+      String(req.params.id),
+      reason,
+      req.correlationId,
+    );
+
+    ok(res, { order }, "Order rejected. The customer will be refunded");
   } catch (error) {
     next(error);
   }

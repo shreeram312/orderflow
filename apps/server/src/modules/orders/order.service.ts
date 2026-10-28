@@ -1,13 +1,19 @@
+import {
+  type KitchenStatus,
+  ROUTING_KEYS,
+  STATUS_ROUTING_KEYS,
+  enqueueEvent,
+} from "@my-better-t-app/messaging";
+
+import { wakeOutbox } from "../../infra/rabbitmq";
 import { badRequest, conflict, notFound } from "../../lib/http-error";
 import { getDb } from "../../services";
 import {
-  ROUTING_KEYS,
-  STATUS_ROUTING_KEYS,
-  buildOrderCreatedEvent,
-  buildOrderStatusChangedEvent,
-  publishOrderEvent,
+  orderCancelled,
+  orderCreated,
+  orderRejectedByKitchen,
+  orderStatusChanged,
 } from "./order.events";
-import type { KitchenStatus } from "./order.events";
 import type {
   CreateOrderInput,
   ListKitchenOrdersQuery,
@@ -63,6 +69,24 @@ function toView(row: OrderRow): OrderView {
 }
 
 /**
+ * The customer's view adds when their money came back. A REJECTED or CANCELLED
+ * order is refunded by the payment worker a moment AFTER the status flips, so
+ * for a short while the status says "refunded" and the wallet does not yet.
+ * `refundedAt` lets the UI say "refund pending" honestly instead of guessing.
+ */
+export type CustomerOrderView = OrderView & { refundedAt: Date | null };
+
+async function withRefunds(views: OrderView[]): Promise<CustomerOrderView[]> {
+  const refunds = await getDb().walletTransaction.findMany({
+    where: { type: "REFUND", orderId: { in: views.map((v) => v.id) } },
+    select: { orderId: true, createdAt: true },
+  });
+  const refundedAt = new Map(refunds.map((r) => [r.orderId, r.createdAt]));
+
+  return views.map((view) => ({ ...view, refundedAt: refundedAt.get(view.id) ?? null }));
+}
+
+/**
  * Creates an order and takes payment.
  *
  * Deliberately does NOT check whether items are PAUSED or the restaurant is
@@ -72,7 +96,8 @@ function toView(row: OrderRow): OrderView {
 export async function createOrder(
   userId: string,
   input: CreateOrderInput,
-): Promise<OrderView> {
+  correlationId: string,
+): Promise<CustomerOrderView> {
   const db = getDb();
 
   const menuItems = await db.menuItem.findMany({
@@ -146,27 +171,34 @@ export async function createOrder(
       },
     });
 
+    // The outbox row commits with the order. Before this, the event was
+    // published after the commit, and a broker hiccup in between left a paid
+    // order stuck in PENDING forever with nothing in any queue.
+    await enqueueEvent(
+      tx,
+      ROUTING_KEYS.orderCreated,
+      orderCreated({
+        orderId: created.id,
+        correlationId,
+        userId,
+        totalAmount: total,
+        items: lines.map((l) => ({
+          menuItemId: l.menuItemId,
+          name: l.name,
+          quantity: l.quantity,
+        })),
+      }),
+    );
+
     return created;
   });
 
-  await publishOrderEvent(
-    ROUTING_KEYS.orderCreated,
-    buildOrderCreatedEvent({
-      orderId: order.id,
-      userId,
-      totalAmount: total,
-      items: lines.map((l) => ({
-        menuItemId: l.menuItemId,
-        name: l.name,
-        quantity: l.quantity,
-      })),
-    }),
-  );
+  wakeOutbox();
 
-  return toView(order);
+  return { ...toView(order), refundedAt: null };
 }
 
-export async function listOrders(userId: string): Promise<OrderView[]> {
+export async function listOrders(userId: string): Promise<CustomerOrderView[]> {
   const rows = await getDb().order.findMany({
     where: { userId },
     include: { items: true },
@@ -174,13 +206,13 @@ export async function listOrders(userId: string): Promise<OrderView[]> {
     take: 20,
   });
 
-  return rows.map(toView);
+  return withRefunds(rows.map(toView));
 }
 
 export async function getOrder(
   userId: string,
   orderId: string,
-): Promise<OrderView> {
+): Promise<CustomerOrderView> {
   const row = await getDb().order.findUnique({
     where: { id: orderId },
     include: { items: true },
@@ -191,7 +223,85 @@ export async function getOrder(
   if (!row || row.userId !== userId)
     throw notFound("ORDER_NOT_FOUND", "That order does not exist");
 
-  return toView(row);
+  const [view] = await withRefunds([toView(row)]);
+  return view!;
+}
+
+/**
+ * Cancelling is allowed until the kitchen starts cooking — after that the
+ * food is real and the business would eat the cost. Kitchen rejection uses the
+ * same window.
+ */
+const BEFORE_PREPARING = ["PENDING", "CONFIRMED"] as const;
+type BeforePreparing = (typeof BEFORE_PREPARING)[number];
+
+const isBeforePreparing = (status: string): status is BeforePreparing =>
+  (BEFORE_PREPARING as readonly string[]).includes(status);
+
+/**
+ * Cancels an order and hands the refund to the payment worker.
+ *
+ * The cancel races the order worker, which may be confirming this exact order
+ * right now. So the UPDATE is a compare-and-set on the status we just read:
+ * if anything moved it in between, zero rows match and nothing is written.
+ *
+ * Note what is NOT here: the refund. The status change and the OrderCancelled
+ * event commit together; the money comes back when the payment worker
+ * consumes that event — a moment later, and even if it is down right now.
+ */
+export async function cancelOrder(
+  userId: string,
+  orderId: string,
+  correlationId: string,
+): Promise<CustomerOrderView> {
+  const db = getDb();
+
+  const existing = await db.order.findUnique({
+    where: { id: orderId },
+    select: { userId: true, status: true, totalAmount: true },
+  });
+
+  if (!existing || existing.userId !== userId)
+    throw notFound("ORDER_NOT_FOUND", "That order does not exist");
+
+  const fromStatus = existing.status;
+  if (!isBeforePreparing(fromStatus)) {
+    throw conflict(
+      "ORDER_NOT_CANCELLABLE",
+      `This order is already ${fromStatus.toLowerCase()} and can no longer be cancelled`,
+    );
+  }
+
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: fromStatus },
+      data: { status: "CANCELLED" },
+    });
+
+    if (count === 0) {
+      // Lost the race: the worker or the kitchen got there first.
+      throw conflict(
+        "ORDER_NOT_CANCELLABLE",
+        "Your order changed status a moment ago. Check it and try again",
+      );
+    }
+
+    await enqueueEvent(
+      tx,
+      ROUTING_KEYS.orderCancelled,
+      orderCancelled({
+        orderId,
+        correlationId,
+        userId,
+        cancelledAtStatus: fromStatus,
+        refundAmount: toNumber(existing.totalAmount),
+      }),
+    );
+  });
+
+  wakeOutbox();
+
+  return getOrder(userId, orderId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -236,6 +346,15 @@ export async function listForKitchen(
   }));
 }
 
+async function kitchenView(orderId: string): Promise<KitchenOrderView> {
+  const row = await getDb().order.findUniqueOrThrow({
+    where: { id: orderId },
+    include: { items: true, user: { select: { name: true } } },
+  });
+
+  return { ...toView(row), customerName: row.user.name };
+}
+
 /**
  * Moves an order one step through the kitchen, then announces it.
  *
@@ -246,6 +365,7 @@ export async function listForKitchen(
 export async function updateStatusFromKitchen(
   orderId: string,
   nextStatus: KitchenStatus,
+  correlationId: string,
 ): Promise<KitchenOrderView> {
   const db = getDb();
 
@@ -256,34 +376,95 @@ export async function updateStatusFromKitchen(
 
   if (!existing) throw notFound("ORDER_NOT_FOUND", "That order does not exist");
 
-  const { count } = await db.order.updateMany({
-    where: { id: orderId, status: REQUIRED_CURRENT[nextStatus] },
-    data: { status: nextStatus },
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: REQUIRED_CURRENT[nextStatus] },
+      data: { status: nextStatus },
+    });
+
+    if (count === 0) {
+      throw conflict(
+        "INVALID_STATUS_TRANSITION",
+        `An order in ${existing.status} cannot be moved to ${nextStatus}`,
+      );
+    }
+
+    // Same transaction as the status change: the event exists if and only if
+    // the change does.
+    await enqueueEvent(
+      tx,
+      STATUS_ROUTING_KEYS[nextStatus],
+      orderStatusChanged({
+        orderId,
+        correlationId,
+        userId: existing.userId,
+        status: nextStatus,
+        previousStatus: existing.status,
+      }),
+    );
   });
 
-  if (count === 0) {
+  wakeOutbox();
+
+  return kitchenView(orderId);
+}
+
+/**
+ * Manual rejection — the kitchen saying no to an order the worker accepted
+ * (or has not got to yet). Same status, same event, same refund path as an
+ * automatic rejection; only the reason differs.
+ */
+export async function rejectFromKitchen(
+  orderId: string,
+  reason: string | undefined,
+  correlationId: string,
+): Promise<KitchenOrderView> {
+  const db = getDb();
+
+  const existing = await db.order.findUnique({
+    where: { id: orderId },
+    select: { userId: true, status: true, totalAmount: true },
+  });
+
+  if (!existing) throw notFound("ORDER_NOT_FOUND", "That order does not exist");
+
+  const fromStatus = existing.status;
+  if (!isBeforePreparing(fromStatus)) {
     throw conflict(
       "INVALID_STATUS_TRANSITION",
-      `An order in ${existing.status} cannot be moved to ${nextStatus}`,
+      `An order in ${fromStatus} can no longer be rejected`,
     );
   }
 
-  // Outside any transaction and after the write, same as order creation: the
-  // database is the source of truth, the event is a notification about it.
-  await publishOrderEvent(
-    STATUS_ROUTING_KEYS[nextStatus],
-    buildOrderStatusChangedEvent({
-      orderId,
-      userId: existing.userId,
-      status: nextStatus,
-      previousStatus: existing.status,
-    }),
-  );
+  const message = reason || "The kitchen could not take this order";
 
-  const updated = await db.order.findUniqueOrThrow({
-    where: { id: orderId },
-    include: { items: true, user: { select: { name: true } } },
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: fromStatus },
+      data: { status: "REJECTED", failureReason: message },
+    });
+
+    if (count === 0) {
+      throw conflict(
+        "INVALID_STATUS_TRANSITION",
+        "This order changed status a moment ago. Refresh and try again",
+      );
+    }
+
+    await enqueueEvent(
+      tx,
+      ROUTING_KEYS.orderRejected,
+      orderRejectedByKitchen({
+        orderId,
+        correlationId,
+        userId: existing.userId,
+        message,
+        refundAmount: toNumber(existing.totalAmount),
+      }),
+    );
   });
 
-  return { ...toView(updated), customerName: updated.user.name };
+  wakeOutbox();
+
+  return kitchenView(orderId);
 }

@@ -10,6 +10,7 @@ export type ErrorCode =
   | "ITEM_NOT_FOUND"
   | "ORDER_NOT_FOUND"
   | "INSUFFICIENT_BALANCE"
+  | "ORDER_NOT_CANCELLABLE"
   | "INVALID_STATUS_TRANSITION";
 
 export class HttpError extends Error {

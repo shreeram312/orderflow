@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "@my-better-t-app/db": "workspace:*",
-    "amqplib": "^2.0.1"
+    "@my-better-t-app/messaging": "workspace:*",
+    "amqplib": "^2.0.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@my-better-t-app/config": "workspace:*",

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@my-better-t-app/db": "workspace:*",
+    "@my-better-t-app/messaging": "workspace:*",
     "@node-rs/argon2": "^2.2.1",
     "amqplib": "^2.0.1",
     "cookie-parser": "^1.4.7",

@@ -236,6 +236,9 @@ importers:
       '@my-better-t-app/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@my-better-t-app/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
@@ -261,6 +264,9 @@ importers:
       '@my-better-t-app/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@my-better-t-app/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
@@ -286,9 +292,15 @@ importers:
       '@my-better-t-app/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@my-better-t-app/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.2
     devDependencies:
       '@my-better-t-app/config':
         specifier: workspace:*
@@ -311,6 +323,9 @@ importers:
       '@my-better-t-app/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@my-better-t-app/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@node-rs/argon2':
         specifier: ^2.2.1
         version: 2.2.1
@@ -460,6 +475,31 @@ importers:
       varlock:
         specifier: 'catalog:'
         version: 1.18.0
+
+  packages/messaging:
+    dependencies:
+      '@my-better-t-app/db':
+        specifier: workspace:*
+        version: link:../db
+      amqplib:
+        specifier: ^2.0.1
+        version: 2.0.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.2
+    devDependencies:
+      '@my-better-t-app/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.5.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
 
   packages/ui:
     dependencies:

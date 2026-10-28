@@ -12,3 +12,5 @@ customerOrderRouter.use(authenticate, requireRole("CUSTOMER"));
 customerOrderRouter.post("/", controller.createOrder);
 customerOrderRouter.get("/", controller.listOrders);
 customerOrderRouter.get("/:id", controller.getOrder);
+// Allowed while PENDING or CONFIRMED. The refund happens asynchronously.
+customerOrderRouter.post("/:id/cancel", controller.cancelOrder);

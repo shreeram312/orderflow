@@ -25,6 +25,14 @@ export const updateOrderStatusSchema = z.object({
 
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;
 
+/** Shown to the customer verbatim, so it is capped and trimmed. Optional:
+ *  a blank reason falls back to a generic message. */
+export const rejectOrderSchema = z.object({
+  reason: z.string().trim().max(200, "Keep the reason under 200 characters").optional(),
+});
+
+export type RejectOrderInput = z.infer<typeof rejectOrderSchema>;
+
 export const listKitchenOrdersQuerySchema = z.object({
   /** Omitted means "the live board": CONFIRMED, PREPARING and READY. */
   status: z

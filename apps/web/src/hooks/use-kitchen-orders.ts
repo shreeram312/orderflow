@@ -28,6 +28,28 @@ export function useKitchenOrders(initialData?: KitchenOrder[]) {
   });
 }
 
+export function useRejectOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) =>
+      (await api.rejectOrder(id, reason)).order,
+
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : "Could not reject the order");
+      void queryClient.invalidateQueries({ queryKey: kitchenOrderKeys.board });
+    },
+
+    onSuccess: (order) => {
+      // REJECTED is off the live board for good.
+      queryClient.setQueryData<KitchenOrder[]>(kitchenOrderKeys.board, (current) =>
+        (current ?? []).filter((row) => row.id !== order.id),
+      );
+      toast.success("Order rejected. The customer will be refunded");
+    },
+  });
+}
+
 export function useSetOrderStatus() {
   const queryClient = useQueryClient();
 
