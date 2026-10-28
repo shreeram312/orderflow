@@ -1,1 +1,116 @@
 @import "@my-better-t-app/ui/globals.css";
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@source "../../../apps/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * OrderFlow palette. Warm neutrals, one accent, and nothing else.
+ *
+ * The page is a shade off white and cards are pure white, so cards read as
+ * surfaces without needing a shadow. Status colours (green / amber / red) come
+ * from Tailwind's own scale and are only ever used to mean something.
+ */
+:root {
+  --background: oklch(0.984 0.0035 85);
+  --foreground: oklch(0.21 0.012 55);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.012 55);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.012 55);
+
+  /* The accent: a warm orange-red. Buttons, active tabs, focus rings. */
+  --primary: oklch(0.6 0.19 35);
+  --primary-foreground: oklch(1 0 0);
+  --primary-soft: oklch(0.96 0.03 45);
+
+  --secondary: oklch(0.955 0.005 85);
+  --secondary-foreground: oklch(0.21 0.012 55);
+  --muted: oklch(0.955 0.005 85);
+  --muted-foreground: oklch(0.5 0.014 60);
+  --accent: oklch(0.955 0.005 85);
+  --accent-foreground: oklch(0.21 0.012 55);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.912 0.006 80);
+  --input: oklch(0.88 0.007 80);
+  --ring: oklch(0.6 0.19 35);
+
+  --radius: 0.625rem;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Shadows are kept only for floating layers (menus, sheets, dialogs). */
+  --shadow-sm: 0 1px 2px 0 oklch(0.21 0.012 55 / 0.05);
+  --shadow: 0 1px 2px 0 oklch(0.21 0.012 55 / 0.05);
+  --shadow-md: 0 4px 12px -2px oklch(0.21 0.012 55 / 0.08), 0 1px 2px 0 oklch(0.21 0.012 55 / 0.04);
+  --shadow-lg: 0 12px 32px -8px oklch(0.21 0.012 55 / 0.14), 0 1px 2px 0 oklch(0.21 0.012 55 / 0.04);
+  --shadow-xl: var(--shadow-lg);
+  --shadow-2xl: var(--shadow-lg);
+
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --chart-1: var(--primary);
+  --chart-2: oklch(0.7 0.12 150);
+  --chart-3: oklch(0.75 0.14 80);
+  --chart-4: oklch(0.6 0.1 250);
+  --chart-5: var(--muted-foreground);
+}
+
+@theme inline {
+  --color-primary-soft: var(--primary-soft);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Prices, ids and timers line up in columns. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Chrome/Safari force their own background and text colour on autofilled
+   inputs, which breaks any themed field. A large inset shadow repaints the
+   field in the card colour; the absurd transition delay stops the browser
+   flashing its own colour back in on focus. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  caret-color: var(--foreground);
+  transition: background-color 100000s ease-in-out 0s;
+}
+
+/* Thin scrollbars for the horizontal tab strips. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
