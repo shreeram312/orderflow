@@ -42,14 +42,21 @@ Deliberate departures from the plan:
 
 ## Deploying
 
-The API and the three workers are four long-running processes from one repo. On Render or Railway that is one project with four services, each rooted at its app folder; the web app goes to Vercel.
+The API and the three workers are four long-running processes from one repo. On Render or Railway that is one project with four services; the web app goes to Vercel (or a fifth service).
 
-| Service | Root directory | Build | Start | Needs `PORT` |
-| ------- | -------------- | ----- | ----- | ------------ |
-| api | `apps/server` | `pnpm install && pnpm build` | `pnpm start` | yes (assigned by the host) |
-| order-worker | `apps/order-worker` | `pnpm install && pnpm build` | `pnpm start` | no — background worker |
-| payment-worker | `apps/payment-worker` | `pnpm install && pnpm build` | `pnpm start` | no |
-| notification-worker | `apps/notification-worker` | `pnpm install && pnpm build` | `pnpm start` | no |
+**Railway:** leave every service's *Root Directory* empty — the repo root. Railway uploads only the root directory to the builder, so rooting a service at `apps/server` cuts it off from `packages/db` and `packages/messaging`, and rooting it at the repo root without config fails with "No start command detected". Instead, point each service's *Config File Path* (Settings → Config-as-code) at its app's `railway.json`, which carries the build, start, pre-deploy and watch paths:
+
+| Railway service | Config File Path | Build | Start |
+| --------------- | ---------------- | ----- | ----- |
+| api | `/apps/server/railway.json` | `pnpm --filter server... build` | `pnpm --filter server start` (+ migrations pre-deploy, `/health` check) |
+| order-worker | `/apps/order-worker/railway.json` | `pnpm --filter order-worker... build` | `pnpm --filter order-worker start` |
+| payment-worker | `/apps/payment-worker/railway.json` | `pnpm --filter payment-worker... build` | `pnpm --filter payment-worker start` |
+| notification-worker | `/apps/notification-worker/railway.json` | `pnpm --filter notification-worker... build` | `pnpm --filter notification-worker start` |
+| web (optional) | `/apps/web/railway.json` | `pnpm --filter web... build` | `pnpm --filter web start` |
+
+`server...` means "server and every workspace package it depends on", so `packages/db` regenerates its Prisma client first. `watchPatterns` keep a web-only commit from redeploying the workers.
+
+**Render:** Render clones the whole repo and only changes the working directory, so per-app root directories work there: root `apps/<app>`, build `pnpm install && pnpm build`, start `pnpm start`.
 
 All four share `DATABASE_URL`, `RABBITMQ_URL` and `RABBITMQ_EXCHANGE`; the API also needs `NODE_ENV=production`, `CORS_ORIGIN` (the Vercel URL, no trailing slash), `JWT_SECRET` and `KITCHEN_SIGNUP_CODE`. `prisma generate` runs from `packages/db`'s `postinstall`, so a fresh checkout builds without the gitignored client. Migrations are not run on boot: set the API's pre-deploy command to `pnpm --filter @my-better-t-app/db db:migrate:deploy`.
 

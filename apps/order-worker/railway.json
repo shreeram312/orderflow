@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm --filter order-worker... build",
+    "watchPatterns": [
+      "/apps/order-worker/**",
+      "/packages/**",
+      "/pnpm-lock.yaml",
+      "/package.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter order-worker start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
