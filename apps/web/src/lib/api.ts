@@ -1,9 +1,17 @@
 /**
- * Read through `process.env` rather than varlock's ENV proxy: this module runs
- * in the browser, and only `process.env.NEXT_PUBLIC_*` is statically inlined
- * into the client bundle. The proxy resolves to undefined there.
+ * The browser never talks to the API's own domain. It calls `/api/*` on the
+ * web app's origin and next.config.ts rewrites that to the API. The session
+ * cookie therefore belongs to the web domain, which matters twice over:
+ *
+ *   - Browsers block cookies on cross-site requests, so a cookie set by
+ *     api.example.com is never sent from web.example.com in production.
+ *   - The layout guards read the session on the Next.js server, which only
+ *     ever sees cookies for its own domain.
+ *
+ * On the server (if this module is ever used there) there is no origin to be
+ * relative to, so it goes straight to the API.
  */
-const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL;
+const SERVER_URL = typeof window === "undefined" ? process.env.NEXT_PUBLIC_SERVER_URL : "/api";
 
 export type Role = "CUSTOMER" | "KITCHEN";
 
