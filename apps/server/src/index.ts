@@ -77,8 +77,10 @@ app.use(errorHandler);
 
 initBroker();
 
-const server = app.listen(3000, () => {
-  log.info("listening", { url: "http://localhost:3000" });
+// Hosts (Render, Railway) assign the port; 3000 is the local default.
+const port = Number(process.env.PORT) || 3000;
+const server = app.listen(port, () => {
+  log.info("listening", { url: `http://localhost:${port}` });
 });
 
 onShutdown(log, async () => {

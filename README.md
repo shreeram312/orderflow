@@ -40,6 +40,19 @@ Deliberate departures from the plan:
 - **Logging is a ~40-line JSON logger**, not Pino. Same fields: `service`, `queue`, `eventId`, `eventType`, `correlationId`, `orderId`, `attempt`, `durationMs`, `err`.
 - **`GET /orders` returns `refundedAt`**, so the customer sees "refund on its way" until the payment worker has actually returned the money.
 
+## Deploying
+
+The API and the three workers are four long-running processes from one repo. On Render or Railway that is one project with four services, each rooted at its app folder; the web app goes to Vercel.
+
+| Service | Root directory | Build | Start | Needs `PORT` |
+| ------- | -------------- | ----- | ----- | ------------ |
+| api | `apps/server` | `pnpm install && pnpm build` | `pnpm start` | yes (assigned by the host) |
+| order-worker | `apps/order-worker` | `pnpm install && pnpm build` | `pnpm start` | no — background worker |
+| payment-worker | `apps/payment-worker` | `pnpm install && pnpm build` | `pnpm start` | no |
+| notification-worker | `apps/notification-worker` | `pnpm install && pnpm build` | `pnpm start` | no |
+
+All four share `DATABASE_URL`, `RABBITMQ_URL` and `RABBITMQ_EXCHANGE`; the API also needs `NODE_ENV=production`, `CORS_ORIGIN` (the Vercel URL, no trailing slash), `JWT_SECRET` and `KITCHEN_SIGNUP_CODE`. `prisma generate` runs from `packages/db`'s `postinstall`, so a fresh checkout builds without the gitignored client. Migrations are not run on boot: set the API's pre-deploy command to `pnpm --filter @my-better-t-app/db db:migrate:deploy`.
+
 ---
 
 # 1. Project Goals

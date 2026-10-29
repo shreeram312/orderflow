@@ -10,6 +10,8 @@
     }
   },
   "scripts": {
+    "postinstall": "prisma generate",
+    "build": "prisma generate",
     "check-types": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
