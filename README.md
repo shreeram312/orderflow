@@ -1,3 +1,5 @@
+<img width="1148" height="505" alt="image" src="https://github.com/user-attachments/assets/99b3f6c1-478e-47f1-8387-d7e707a8b6fa" />
+
 # OrderFlow
 
 ## Event-Driven Restaurant Order Processing System
